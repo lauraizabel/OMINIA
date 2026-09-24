@@ -1,53 +1,29 @@
-﻿using Ambev.DeveloperEvaluation.Domain.Entities;
+using Ambev.DeveloperEvaluation.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using System.Reflection;
 
 namespace Ambev.DeveloperEvaluation.ORM;
 
 public class DefaultContext : DbContext
 {
-    public DbSet<User> Users { get; set; }
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Sale> Sales => Set<Sale>();
 
     public DefaultContext(DbContextOptions<DefaultContext> options) : base(options)
     {
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Relationship indexes are defined explicitly for the workload. The SaleItem FK is
+        // covered by the unique (SaleId, ProductExternalId) index created by the migration.
+        configurationBuilder.Conventions.Remove(typeof(ForeignKeyIndexConvention));
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         base.OnModelCreating(modelBuilder);
-    }
-}
-public class YourDbContextFactory : IDesignTimeDbContextFactory<DefaultContext>
-{
-    public DefaultContext CreateDbContext(string[] args)
-    {
-        var webApiDirectory = Path.GetFullPath(
-            Path.Combine(Directory.GetCurrentDirectory(), "src", "backend", "Ambev.DeveloperEvaluation.WebApi"));
-
-        if (!Directory.Exists(webApiDirectory))
-        {
-            webApiDirectory = Directory.GetCurrentDirectory();
-        }
-
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .SetBasePath(webApiDirectory)
-            .AddJsonFile("appsettings.json")
-            .AddJsonFile("appsettings.Development.json", optional: true)
-            .AddEnvironmentVariables()
-            .Build();
-
-        var builder = new DbContextOptionsBuilder<DefaultContext>();
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-
-        builder.UseNpgsql(
-               connectionString,
-               b => b.MigrationsAssembly(typeof(DefaultContext).Assembly.FullName)
-        );
-
-        return new DefaultContext(builder.Options);
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
 }
