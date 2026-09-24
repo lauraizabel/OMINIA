@@ -89,106 +89,14 @@ public sealed class Sale
         IEnumerable<SaleItemDraft?>? activeItems,
         DateTimeOffset now)
     {
-        EnsureAvailable();
-
-        if (IsCancelled)
-            throw new DomainConflictException(
-                DomainErrorCodes.Sale.Cancelled,
-                "A cancelled sale cannot be updated.");
-
+        EnsureCanUpdate();
         var normalizedNow = ValidateOperationTime(now);
-        var normalizedSaleDate = ValidateSaleDate(saleDate, normalizedNow);
-        var validatedCustomer = RequireIdentity(customer, RequiredIdentity.Customer);
-        var validatedBranch = RequireIdentity(branch, RequiredIdentity.Branch);
-        var drafts = MaterializeDrafts(activeItems);
+        var plan = BuildUpdatePlan(saleDate, customer, branch, activeItems, normalizedNow);
 
-        var cancelledItems = _items.Where(item => item.IsCancelled).ToArray();
-        if (cancelledItems.Length + drafts.Count > MaximumItems)
-            throw new DomainValidationException(
-                DomainErrorCodes.Sale.TooManyItems,
-                $"A sale can contain at most {MaximumItems} items, including cancelled items.");
-
-        var products = new HashSet<string>(
-            cancelledItems.Select(item => item.Product.ExternalId),
-            StringComparer.Ordinal);
-        var existingById = _items.ToDictionary(item => item.Id);
-        var includedExistingIds = new HashSet<Guid>();
-        var plans = new List<UpdatePlan>(drafts.Count);
-
-        foreach (var draft in drafts)
-        {
-            var product = RequireProduct(draft.Product);
-            _ = SaleDiscountPolicy.Calculate(draft.Quantity, draft.UnitPrice);
-
-            if (!products.Add(product.ExternalId))
-                throw DuplicateProduct(product.ExternalId);
-
-            if (!draft.Id.HasValue)
-            {
-                plans.Add(new UpdatePlan(null, draft));
-                continue;
-            }
-
-            if (draft.Id.Value == Guid.Empty ||
-                !existingById.TryGetValue(draft.Id.Value, out var existing) ||
-                existing.IsCancelled)
-            {
-                throw new DomainValidationException(
-                    DomainErrorCodes.SaleItem.InvalidId,
-                    $"Item '{draft.Id}' is not an active item of this sale.");
-            }
-
-            if (!includedExistingIds.Add(existing.Id))
-                throw new DomainValidationException(
-                    DomainErrorCodes.SaleItem.DuplicateId,
-                    $"Item '{existing.Id}' appears more than once.");
-
-            if (existing.Product != product)
-                throw new DomainValidationException(
-                    DomainErrorCodes.SaleItem.ProductIsImmutable,
-                    "The product identity and snapshot of an existing item cannot be changed.");
-
-            plans.Add(new UpdatePlan(existing, draft));
-        }
-
-        if (_items.Any(item => !item.IsCancelled && !includedExistingIds.Contains(item.Id)))
-            throw new DomainValidationException(
-                DomainErrorCodes.SaleItem.ActiveItemOmitted,
-                "Every active item must be included in an update. Use the cancellation endpoint to remove one.");
-
-        var changed = SaleDate != normalizedSaleDate ||
-                      Customer != validatedCustomer ||
-                      Branch != validatedBranch ||
-                      plans.Any(plan => plan.Existing is null ||
-                                        plan.Existing.Quantity != plan.Draft.Quantity ||
-                                        plan.Existing.UnitPrice != plan.Draft.UnitPrice);
-
-        if (!changed)
+        if (!HasChanges(plan))
             return false;
 
-        SaleDate = normalizedSaleDate;
-        Customer = validatedCustomer;
-        Branch = validatedBranch;
-
-        foreach (var plan in plans)
-        {
-            if (plan.Existing is not null)
-            {
-                plan.Existing.Update(plan.Draft.Quantity, plan.Draft.UnitPrice);
-                continue;
-            }
-
-            _items.Add(SaleItem.Create(
-                Id,
-                plan.Draft.Product,
-                plan.Draft.Quantity,
-                plan.Draft.UnitPrice));
-        }
-
-        UpdatedAt = normalizedNow;
-        Version++;
-        RecalculateTotal();
-        _domainEvents.Add(new SaleModifiedEvent(Id, Version, normalizedNow));
+        ApplyUpdate(plan, normalizedNow);
         return true;
     }
 
@@ -263,6 +171,151 @@ public sealed class Sale
     public void ClearDomainEvents()
     {
         _domainEvents.Clear();
+    }
+
+    private void EnsureCanUpdate()
+    {
+        EnsureAvailable();
+
+        if (IsCancelled)
+            throw new DomainConflictException(
+                DomainErrorCodes.Sale.Cancelled,
+                "A cancelled sale cannot be updated.");
+    }
+
+    private SaleUpdatePlan BuildUpdatePlan(
+        DateTimeOffset saleDate,
+        ExternalIdentity? customer,
+        ExternalIdentity? branch,
+        IEnumerable<SaleItemDraft?>? activeItems,
+        DateTimeOffset now)
+    {
+        var normalizedSaleDate = ValidateSaleDate(saleDate, now);
+        var validatedCustomer = RequireIdentity(customer, RequiredIdentity.Customer);
+        var validatedBranch = RequireIdentity(branch, RequiredIdentity.Branch);
+        var drafts = MaterializeDrafts(activeItems);
+        var cancelledItems = _items.Where(item => item.IsCancelled).ToArray();
+
+        EnsureItemCapacity(drafts.Count, cancelledItems.Length);
+
+        return new SaleUpdatePlan(
+            normalizedSaleDate,
+            validatedCustomer,
+            validatedBranch,
+            BuildItemUpdatePlans(drafts, cancelledItems));
+    }
+
+    private List<ItemUpdatePlan> BuildItemUpdatePlans(
+        IReadOnlyCollection<SaleItemDraft> drafts,
+        IReadOnlyCollection<SaleItem> cancelledItems)
+    {
+        var products = new HashSet<string>(
+            cancelledItems.Select(item => item.Product.ExternalId),
+            StringComparer.Ordinal);
+        var existingById = _items.ToDictionary(item => item.Id);
+        var includedExistingIds = new HashSet<Guid>();
+        var plans = new List<ItemUpdatePlan>(drafts.Count);
+
+        foreach (var draft in drafts)
+        {
+            var product = RequireProduct(draft.Product);
+            _ = SaleDiscountPolicy.Calculate(draft.Quantity, draft.UnitPrice);
+
+            if (!products.Add(product.ExternalId))
+                throw DuplicateProduct(product.ExternalId);
+
+            plans.Add(BuildItemUpdatePlan(draft, product, existingById, includedExistingIds));
+        }
+
+        EnsureEveryActiveItemIsIncluded(includedExistingIds);
+        return plans;
+    }
+
+    private static ItemUpdatePlan BuildItemUpdatePlan(
+        SaleItemDraft draft,
+        ExternalIdentity product,
+        IReadOnlyDictionary<Guid, SaleItem> existingById,
+        ISet<Guid> includedExistingIds)
+    {
+        if (!draft.Id.HasValue)
+            return new ItemUpdatePlan(null, draft);
+
+        if (draft.Id.Value == Guid.Empty ||
+            !existingById.TryGetValue(draft.Id.Value, out var existing) ||
+            existing.IsCancelled)
+        {
+            throw new DomainValidationException(
+                DomainErrorCodes.SaleItem.InvalidId,
+                $"Item '{draft.Id}' is not an active item of this sale.");
+        }
+
+        if (!includedExistingIds.Add(existing.Id))
+            throw new DomainValidationException(
+                DomainErrorCodes.SaleItem.DuplicateId,
+                $"Item '{existing.Id}' appears more than once.");
+
+        if (existing.Product != product)
+            throw new DomainValidationException(
+                DomainErrorCodes.SaleItem.ProductIsImmutable,
+                "The product identity and snapshot of an existing item cannot be changed.");
+
+        return new ItemUpdatePlan(existing, draft);
+    }
+
+    private void EnsureEveryActiveItemIsIncluded(ISet<Guid> includedExistingIds)
+    {
+        if (_items.Any(item => !item.IsCancelled && !includedExistingIds.Contains(item.Id)))
+            throw new DomainValidationException(
+                DomainErrorCodes.SaleItem.ActiveItemOmitted,
+                "Every active item must be included in an update. Use the cancellation endpoint to remove one.");
+    }
+
+    private static void EnsureItemCapacity(int activeItemCount, int cancelledItemCount)
+    {
+        if (activeItemCount + cancelledItemCount > MaximumItems)
+            throw new DomainValidationException(
+                DomainErrorCodes.Sale.TooManyItems,
+                $"A sale can contain at most {MaximumItems} items, including cancelled items.");
+    }
+
+    private bool HasChanges(SaleUpdatePlan plan)
+    {
+        return SaleDate != plan.SaleDate ||
+               Customer != plan.Customer ||
+               Branch != plan.Branch ||
+               plan.Items.Any(item => item.Existing is null ||
+                                      item.Existing.Quantity != item.Draft.Quantity ||
+                                      item.Existing.UnitPrice != item.Draft.UnitPrice);
+    }
+
+    private void ApplyUpdate(SaleUpdatePlan plan, DateTimeOffset now)
+    {
+        SaleDate = plan.SaleDate;
+        Customer = plan.Customer;
+        Branch = plan.Branch;
+
+        foreach (var item in plan.Items)
+            ApplyItemUpdate(item);
+
+        UpdatedAt = now;
+        Version++;
+        RecalculateTotal();
+        _domainEvents.Add(new SaleModifiedEvent(Id, Version, now));
+    }
+
+    private void ApplyItemUpdate(ItemUpdatePlan plan)
+    {
+        if (plan.Existing is not null)
+        {
+            plan.Existing.Update(plan.Draft.Quantity, plan.Draft.UnitPrice);
+            return;
+        }
+
+        _items.Add(SaleItem.Create(
+            Id,
+            plan.Draft.Product,
+            plan.Draft.Quantity,
+            plan.Draft.UnitPrice));
     }
 
     private static string NormalizeSaleNumber(string? saleNumber)
@@ -392,5 +445,11 @@ public sealed class Sale
         TotalAmount = _items.Sum(item => item.EffectiveAmount);
     }
 
-    private sealed record UpdatePlan(SaleItem? Existing, SaleItemDraft Draft);
+    private sealed record SaleUpdatePlan(
+        DateTimeOffset SaleDate,
+        ExternalIdentity Customer,
+        ExternalIdentity Branch,
+        IReadOnlyList<ItemUpdatePlan> Items);
+
+    private sealed record ItemUpdatePlan(SaleItem? Existing, SaleItemDraft Draft);
 }
