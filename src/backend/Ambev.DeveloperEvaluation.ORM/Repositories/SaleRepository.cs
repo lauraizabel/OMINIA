@@ -25,6 +25,12 @@ public sealed class SaleRepository : ISaleRepository
             .SingleOrDefaultAsync(sale => sale.Id == id, cancellationToken);
     }
 
+    public Task<Sale?> GetByIdReadOnlyAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return QueryAggregate(_context.Sales.AsNoTracking())
+            .SingleOrDefaultAsync(sale => sale.Id == id, cancellationToken);
+    }
+
     public Task<Sale?> GetByIdIncludingDeletedAsync(
         Guid id,
         CancellationToken cancellationToken = default)

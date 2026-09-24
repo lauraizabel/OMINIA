@@ -9,6 +9,7 @@ public static class ApiErrorTypes
     public const string DependencyUnavailable = "DependencyUnavailable";
     public const string InvalidRequest = "InvalidRequest";
     public const string PayloadTooLarge = "PayloadTooLarge";
+    public const string PreconditionRequired = "PreconditionRequired";
     public const string RateLimitExceeded = "RateLimitExceeded";
     public const string Request = "RequestError";
     public const string ResourceNotFound = "ResourceNotFound";
