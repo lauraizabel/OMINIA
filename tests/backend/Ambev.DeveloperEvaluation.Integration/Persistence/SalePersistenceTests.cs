@@ -141,7 +141,7 @@ public sealed class SalePersistenceTests
         await using (var writeContext = CreateContext())
         {
             ISaleRepository repository = new SaleRepository(writeContext);
-            IUnitOfWork unitOfWork = new UnitOfWork(writeContext);
+            IUnitOfWork unitOfWork = TestUnitOfWork.Create(writeContext);
             await repository.AddAsync(sale);
             await unitOfWork.CommitAsync();
         }
@@ -174,10 +174,10 @@ public sealed class SalePersistenceTests
         {
             var repository = new SaleRepository(writeContext);
             await repository.AddAsync(sale);
-            await new UnitOfWork(writeContext).CommitAsync();
+            await TestUnitOfWork.Create(writeContext).CommitAsync();
 
             sale.Delete(Now.AddMinutes(1));
-            await new UnitOfWork(writeContext).CommitAsync();
+            await TestUnitOfWork.Create(writeContext).CommitAsync();
         }
 
         await using var readContext = CreateContext();
@@ -202,7 +202,7 @@ public sealed class SalePersistenceTests
         await using (var seedContext = CreateContext())
         {
             await new SaleRepository(seedContext).AddAsync(sale);
-            await new UnitOfWork(seedContext).CommitAsync();
+            await TestUnitOfWork.Create(seedContext).CommitAsync();
         }
 
         await using (var updateContext = CreateContext())
@@ -218,7 +218,7 @@ public sealed class SalePersistenceTests
                 [SaleItemDraft.Existing(item.Id, item.Product, item.Quantity, item.UnitPrice)],
                 Now.AddMinutes(1));
 
-            await new UnitOfWork(updateContext).CommitAsync();
+            await TestUnitOfWork.Create(updateContext).CommitAsync();
         }
 
         await using var verificationContext = CreateContext();
@@ -241,9 +241,9 @@ public sealed class SalePersistenceTests
         await using (var firstContext = CreateContext())
         {
             await new SaleRepository(firstContext).AddAsync(original);
-            await new UnitOfWork(firstContext).CommitAsync();
+            await TestUnitOfWork.Create(firstContext).CommitAsync();
             original.Delete(Now.AddMinutes(1));
-            await new UnitOfWork(firstContext).CommitAsync();
+            await TestUnitOfWork.Create(firstContext).CommitAsync();
         }
 
         await using (var duplicateContext = CreateContext())
@@ -252,7 +252,7 @@ public sealed class SalePersistenceTests
                 CreateSale("SALE-UNIQUE", SaleItemDraft.New(Product("PRODUCT-002"), 1, 10m)));
 
             await Assert.ThrowsAsync<DbUpdateException>(
-                () => new UnitOfWork(duplicateContext).CommitAsync());
+                () => TestUnitOfWork.Create(duplicateContext).CommitAsync());
         }
 
         await using var verificationContext = CreateContext();
@@ -273,7 +273,7 @@ public sealed class SalePersistenceTests
                 .CurrentValue = 21;
 
             await Assert.ThrowsAsync<DbUpdateException>(
-                () => new UnitOfWork(invalidContext).CommitAsync());
+                () => TestUnitOfWork.Create(invalidContext).CommitAsync());
         }
 
         await using var verificationContext = CreateContext();
@@ -290,7 +290,7 @@ public sealed class SalePersistenceTests
         await using (var seedContext = CreateContext())
         {
             await new SaleRepository(seedContext).AddAsync(sale);
-            await new UnitOfWork(seedContext).CommitAsync();
+            await TestUnitOfWork.Create(seedContext).CommitAsync();
         }
 
         await using var firstContext = CreateContext();
@@ -303,9 +303,9 @@ public sealed class SalePersistenceTests
         UpdateQuantity(first, 4, Now.AddMinutes(1));
         UpdateQuantity(second, 10, Now.AddMinutes(2));
 
-        await new UnitOfWork(firstContext).CommitAsync();
+        await TestUnitOfWork.Create(firstContext).CommitAsync();
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-            () => new UnitOfWork(secondContext).CommitAsync());
+            () => TestUnitOfWork.Create(secondContext).CommitAsync());
 
         await using var verificationContext = CreateContext();
         var persisted = await new SaleRepository(verificationContext).GetByIdAsync(sale.Id);

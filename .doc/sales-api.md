@@ -281,4 +281,6 @@ Creation with an existing normalized sale number returns `409`. It is not an ide
 | Error format, authorization, request limits | T08 | Functional security and failure tests |
 | Optional events | T09 | Post-commit event tests |
 
-Event publication remains optional under the challenge README. If implemented, `SaleCreated`, `SaleModified`, `SaleCancelled`, and `ItemCancelled` are emitted only after a successful commit. Durable delivery through an outbox is an extension and is not guaranteed by this contract.
+Event publication remains optional under the challenge README. `SaleCreated`, `SaleModified`, `SaleCancelled`, and `ItemCancelled` are logged only after a successful commit with an event ID, sale ID, aggregate version, occurrence time, and correlation ID. A publishing failure is logged without reporting the already committed sale write as rolled back.
+
+This delivery is best effort. A process failure between the PostgreSQL commit and the structured log can lose an event. Durable delivery through a transactional outbox is a separate extension and is not guaranteed by this contract.
