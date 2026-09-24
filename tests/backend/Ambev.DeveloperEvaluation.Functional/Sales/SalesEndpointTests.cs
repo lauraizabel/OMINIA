@@ -7,6 +7,7 @@ using Ambev.DeveloperEvaluation.Application.Sales.Common;
 using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSale;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
+using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.WebApi;
 using MediatR;
@@ -27,6 +28,62 @@ namespace Ambev.DeveloperEvaluation.Functional.Sales;
 public sealed class SalesEndpointTests
 {
     private static readonly Guid SaleId = Guid.Parse("99cc2492-c255-44c8-8eb8-87709bed5290");
+
+    [Fact]
+    public async Task List_returns_direct_paged_summaries_and_forwards_typed_criteria()
+    {
+        var mediator = Substitute.For<IMediator>();
+        mediator.Send(Arg.Any<ListSalesQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedSalesResult(
+                [new SaleSummaryResult(
+                    SaleId,
+                    "SALE-001",
+                    new DateTimeOffset(2026, 9, 24, 12, 0, 0, TimeSpan.Zero),
+                    new ExternalIdentityResult("CUSTOMER-001", "Customer"),
+                    new ExternalIdentityResult("BRANCH-001", "Branch"),
+                    36m,
+                    false,
+                    new DateTimeOffset(2026, 9, 24, 12, 1, 0, TimeSpan.Zero),
+                    1)],
+                26,
+                2,
+                2));
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/api/sales?_page=2&_size=25&_order=totalAmount%20desc&customerExternalId=CUSTOMER-001");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(26, body.RootElement.GetProperty("totalItems").GetInt64());
+        Assert.Equal(2, body.RootElement.GetProperty("currentPage").GetInt32());
+        var summary = Assert.Single(body.RootElement.GetProperty("data").EnumerateArray());
+        Assert.Equal(SaleId, summary.GetProperty("id").GetGuid());
+        Assert.False(summary.TryGetProperty("items", out _));
+        await mediator.Received(1).Send(
+            Arg.Is<ListSalesQuery>(query =>
+                query.Criteria.Page == 2 &&
+                query.Criteria.PageSize == 25 &&
+                query.Criteria.CustomerExternalIds.Single() == "CUSTOMER-001" &&
+                query.Criteria.Order.First().Field == SaleOrderField.TotalAmount &&
+                query.Criteria.Order.Last().Field == SaleOrderField.Id),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task List_with_unknown_parameter_returns_validation_contract_without_dispatching()
+    {
+        var mediator = Substitute.For<IMediator>();
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/sales?sort=DROP%20TABLE%20Sales");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertProblemType(response, "ValidationError");
+        await mediator.DidNotReceive().Send(Arg.Any<ListSalesQuery>(), Arg.Any<CancellationToken>());
+    }
 
     [Fact]
     public async Task Post_returns_direct_resource_location_and_etag()
