@@ -28,10 +28,10 @@ public sealed class SaleLifecycleConcurrencyTests
 
         cancellationCopy.Cancel(Now.AddMinutes(1));
         UpdateQuantity(updateCopy, 4, Now.AddMinutes(2));
-        await new UnitOfWork(cancellationContext).CommitAsync();
+        await TestUnitOfWork.Create(cancellationContext).CommitAsync();
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-            () => new UnitOfWork(updateContext).CommitAsync());
+            () => TestUnitOfWork.Create(updateContext).CommitAsync());
 
         await using var verificationContext = CreateContext();
         var persisted = await new SaleRepository(verificationContext).GetByIdAsync(sale.Id);
@@ -55,10 +55,10 @@ public sealed class SaleLifecycleConcurrencyTests
 
         deletionCopy.Delete(Now.AddMinutes(1));
         cancellationCopy.Cancel(Now.AddMinutes(2));
-        await new UnitOfWork(deletionContext).CommitAsync();
+        await TestUnitOfWork.Create(deletionContext).CommitAsync();
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-            () => new UnitOfWork(cancellationContext).CommitAsync());
+            () => TestUnitOfWork.Create(cancellationContext).CommitAsync());
 
         await using var verificationContext = CreateContext();
         var repository = new SaleRepository(verificationContext);

@@ -18,20 +18,12 @@ namespace Ambev.DeveloperEvaluation.Common.HealthChecks;
 public static class HealthChecksExtension
 {
     /// <summary>
-    /// Adds basic health checks to the <see cref="HealthCheckService"/> in the application's service collection.
+    /// Adds the process liveness check to the application's health check service.
     /// </summary>
     /// <param name="builder">The <see cref="WebApplicationBuilder"/> to add the health checks to.</param>
     /// <remarks>
-    /// This method adds two basic health checks:
-    /// <list type="bullet">
-    /// <item>
-    /// <description>"Liveness": A simple check that always returns healthy, tagged with "liveness".</description>
-    /// </item>
-    /// <item>
-    /// <description>"Readiness": A simple check that always returns healthy, tagged with "readiness".</description>
-    /// </item>
-    /// </list>
-    /// These checks can be used to verify the basic operational status of the application.
+    /// Liveness only verifies that the process can respond. Infrastructure dependencies
+    /// belong to readiness and are registered by their owning modules.
     /// </remarks>
     /// <example>
     /// This method can be used in Program.cs:
@@ -43,8 +35,7 @@ public static class HealthChecksExtension
     public static void AddBasicHealthChecks(this WebApplicationBuilder builder)
     {
         builder.Services.AddHealthChecks()
-            .AddCheck("Liveness", () => HealthCheckResult.Healthy(), tags: ["liveness"])
-            .AddCheck("Readiness", () => HealthCheckResult.Healthy(), tags: ["readiness"]);
+            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["liveness"]);
     }
 
     /// <summary>
@@ -74,13 +65,13 @@ public static class HealthChecksExtension
     /// </example>
     public static void UseBasicHealthChecks(this WebApplication app)
     {
-        var livenessOptions = WriteHealtCheckRespose(app, "liveness");
+        var livenessOptions = WriteHealthCheckResponse(app, "liveness");
         app.UseHealthChecks("/health/live", livenessOptions);
 
-        var readinessOptions = WriteHealtCheckRespose(app, "readiness");
+        var readinessOptions = WriteHealthCheckResponse(app, "readiness");
         app.UseHealthChecks("/health/ready", readinessOptions);
 
-        var healthOptions = WriteHealtCheckRespose(app, string.Empty);
+        var healthOptions = WriteHealthCheckResponse(app);
         app.UseHealthChecks("/health", healthOptions);
 
         var logger = app.Services.GetRequiredService<ILogger<HealthCheckService>>();
@@ -99,11 +90,11 @@ public static class HealthChecksExtension
     /// - Sets specific HTTP status codes for different health states.
     /// - Configures a custom response writer that generates a JSON with detailed health status information.
     /// </remarks>
-    private static HealthCheckOptions WriteHealtCheckRespose(this WebApplication app, string tag)
+    private static HealthCheckOptions WriteHealthCheckResponse(this WebApplication app, string? tag = null)
     {
         var options = new HealthCheckOptions
         {
-            Predicate = (check) => check.Tags.Contains(tag),
+            Predicate = tag is null ? _ => true : check => check.Tags.Contains(tag),
             ResultStatusCodes =
             {
                 [HealthStatus.Healthy] = StatusCodes.Status200OK,
@@ -120,7 +111,6 @@ public static class HealthChecksExtension
                         name = e.Key,
                         status = e.Value.Status.ToString(),
                         description = e.Value.Description,
-                        errorMessage = e.Value.Exception?.Message,
                         hostEnvironment = app.Environment.EnvironmentName.ToLowerInvariant()
                     }),
                 };

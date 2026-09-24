@@ -25,6 +25,12 @@ dotnet run --project src/backend/Ambev.DeveloperEvaluation.WebApi
 
 The Rider launch profile uses `http://localhost:5119`. PostgreSQL from Docker Compose is exposed on host port `5434`.
 
+Health probes are available without authentication:
+
+- `/health/live` checks whether the API process can respond and does not depend on PostgreSQL.
+- `/health/ready` checks PostgreSQL connectivity and returns `503 Service Unavailable` while the database is unavailable.
+- `/health` reports both checks.
+
 ## Optional development administrator
 
 The development-only seed is disabled by default and never runs in other environments. Enable it through User Secrets when a local administrator is needed:
