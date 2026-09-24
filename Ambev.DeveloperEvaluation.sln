@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35027.167
@@ -29,23 +29,23 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Integration", "Integration"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Functional", "Functional", "{95501476-3BCD-48DA-A4E5-696A0B78A0BD}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.ORM", "src\Ambev.DeveloperEvaluation.ORM\Ambev.DeveloperEvaluation.ORM.csproj", "{B62C8404-A5FA-4D58-9398-1E3C55C28D14}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.ORM", "src\backend\Ambev.DeveloperEvaluation.ORM\Ambev.DeveloperEvaluation.ORM.csproj", "{B62C8404-A5FA-4D58-9398-1E3C55C28D14}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Application", "src\Ambev.DeveloperEvaluation.Application\Ambev.DeveloperEvaluation.Application.csproj", "{80CED839-FE4A-4286-9403-252D230BA2A0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Application", "src\backend\Ambev.DeveloperEvaluation.Application\Ambev.DeveloperEvaluation.Application.csproj", "{80CED839-FE4A-4286-9403-252D230BA2A0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Domain", "src\Ambev.DeveloperEvaluation.Domain\Ambev.DeveloperEvaluation.Domain.csproj", "{B19079B3-A9DD-4408-9ED2-899D735C66BF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Domain", "src\backend\Ambev.DeveloperEvaluation.Domain\Ambev.DeveloperEvaluation.Domain.csproj", "{B19079B3-A9DD-4408-9ED2-899D735C66BF}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Functional", "tests\Ambev.DeveloperEvaluation.Functional\Ambev.DeveloperEvaluation.Functional.csproj", "{2ACF31E5-F79E-4A52-AD6F-91CB6F05F700}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Functional", "tests\backend\Ambev.DeveloperEvaluation.Functional\Ambev.DeveloperEvaluation.Functional.csproj", "{2ACF31E5-F79E-4A52-AD6F-91CB6F05F700}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Integration", "tests\Ambev.DeveloperEvaluation.Integration\Ambev.DeveloperEvaluation.Integration.csproj", "{15961D91-452B-48E0-9871-2964E751B744}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Integration", "tests\backend\Ambev.DeveloperEvaluation.Integration\Ambev.DeveloperEvaluation.Integration.csproj", "{15961D91-452B-48E0-9871-2964E751B744}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Unit", "tests\Ambev.DeveloperEvaluation.Unit\Ambev.DeveloperEvaluation.Unit.csproj", "{54E6E012-F460-4A2B-95C5-27A2EF18A713}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Unit", "tests\backend\Ambev.DeveloperEvaluation.Unit\Ambev.DeveloperEvaluation.Unit.csproj", "{54E6E012-F460-4A2B-95C5-27A2EF18A713}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Common", "src\Ambev.DeveloperEvaluation.Common\Ambev.DeveloperEvaluation.Common.csproj", "{7E1EFB67-8305-423C-9E09-CBC62465FA18}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.Common", "src\backend\Ambev.DeveloperEvaluation.Common\Ambev.DeveloperEvaluation.Common.csproj", "{7E1EFB67-8305-423C-9E09-CBC62465FA18}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.IoC", "src\Ambev.DeveloperEvaluation.IoC\Ambev.DeveloperEvaluation.IoC.csproj", "{C0DDDE39-2D65-4AF5-90D4-F35D87A79009}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.IoC", "src\backend\Ambev.DeveloperEvaluation.IoC\Ambev.DeveloperEvaluation.IoC.csproj", "{C0DDDE39-2D65-4AF5-90D4-F35D87A79009}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.WebApi", "src\Ambev.DeveloperEvaluation.WebApi\Ambev.DeveloperEvaluation.WebApi.csproj", "{2B484022-3EF7-4BAB-ADB8-849F9E419EDD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ambev.DeveloperEvaluation.WebApi", "src\backend\Ambev.DeveloperEvaluation.WebApi\Ambev.DeveloperEvaluation.WebApi.csproj", "{2B484022-3EF7-4BAB-ADB8-849F9E419EDD}"
 EndProject
 Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{4AF79501-F785-4B98-8EE5-54BE186D67A2}"
 EndProject
