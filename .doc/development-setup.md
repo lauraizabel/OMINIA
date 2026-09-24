@@ -25,6 +25,25 @@ dotnet run --project src/backend/Ambev.DeveloperEvaluation.WebApi
 
 The Rider launch profile uses `http://localhost:5119`. PostgreSQL from Docker Compose is exposed on host port `5434`.
 
+## Angular frontend
+
+The frontend requires Node.js `22.22.3` or later in the Node 22 release line and npm 10. Start the API first, then run:
+
+```powershell
+cd src/frontend
+npm ci
+npm start
+```
+
+Open `http://localhost:4200`. The development server proxies `/api` to `http://localhost:5119`. Authentication tokens remain in memory and are never written to browser storage, so a page reload requires signing in again. The original internal deep link is restored after a successful login.
+
+Run the frontend checks with:
+
+```powershell
+npm run test:ci
+npm run build
+```
+
 Health probes are available without authentication:
 
 - `/health/live` checks whether the API process can respond and does not depend on PostgreSQL.
