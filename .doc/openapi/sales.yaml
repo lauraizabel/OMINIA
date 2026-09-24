@@ -1,0 +1,762 @@
+openapi: 3.0.3
+info:
+  title: DeveloperStore Sales API
+  version: 1.0.0-draft
+  description: |
+    Implementation contract for the sales API. Domain code, persistence,
+    controllers, and tests must conform to this contract.
+servers:
+  - url: http://localhost:8080
+    description: Docker Compose development server
+  - url: http://localhost:5119
+    description: Local development server
+tags:
+  - name: Sales
+    description: Sale lifecycle operations
+security:
+  - bearerAuth: []
+paths:
+  /api/sales:
+    post:
+      tags: [Sales]
+      summary: Create a sale
+      operationId: createSale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSaleRequest'
+            examples:
+              fourItems:
+                summary: Exactly four units receive a 10 percent discount
+                value:
+                  saleNumber: SALE-0001
+                  saleDate: '2026-09-23T10:00:00-03:00'
+                  customer:
+                    externalId: CUSTOMER-001
+                    name: Example Customer
+                  branch:
+                    externalId: BRANCH-FOR
+                    name: Fortaleza Branch
+                  items:
+                    - product:
+                        externalId: PRODUCT-001
+                        name: Example Product
+                      quantity: 4
+                      unitPrice: 10.00
+      responses:
+        '201':
+          description: Sale created
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    get:
+      tags: [Sales]
+      summary: List sales
+      operationId: listSales
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Order'
+        - name: saleNumber
+          in: query
+          description: Exact normalized number or one pattern with an optional asterisk at either edge.
+          schema:
+            type: string
+            maxLength: 52
+          example: SALE-*
+        - name: customerExternalId
+          in: query
+          description: Exact external IDs. Repeating the parameter applies logical OR.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              minLength: 1
+              maxLength: 100
+        - name: branchExternalId
+          in: query
+          description: Exact external IDs. Repeating the parameter applies logical OR.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              minLength: 1
+              maxLength: 100
+        - name: isCancelled
+          in: query
+          description: Cancellation states. Repeating the parameter applies logical OR.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: boolean
+        - name: _minSaleDate
+          in: query
+          description: Inclusive minimum sale timestamp with an explicit UTC offset.
+          schema:
+            type: string
+            format: date-time
+        - name: _maxSaleDate
+          in: query
+          description: Inclusive maximum sale timestamp with an explicit UTC offset.
+          schema:
+            type: string
+            format: date-time
+        - name: _minTotalAmount
+          in: query
+          description: Inclusive minimum effective total.
+          schema:
+            $ref: '#/components/schemas/Money'
+        - name: _maxTotalAmount
+          in: query
+          description: Inclusive maximum effective total.
+          schema:
+            $ref: '#/components/schemas/Money'
+      responses:
+        '200':
+          description: Paginated sale summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSalesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/sales/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    get:
+      tags: [Sales]
+      summary: Retrieve a sale
+      operationId: getSale
+      responses:
+        '200':
+          description: Sale found
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Sales]
+      summary: Update a sale and its active lines
+      description: |
+        Replaces editable sale data and the complete active-line collection.
+        Cancelled lines are not submitted and remain immutable.
+      operationId: updateSale
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSaleRequest'
+      responses:
+        '200':
+          description: Sale updated or unchanged after a valid no-op request
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      tags: [Sales]
+      summary: Soft-delete a sale
+      operationId: deleteSale
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Sale deleted, or a matching delete safely repeated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/sales/{id}/cancel:
+    post:
+      tags: [Sales]
+      summary: Cancel a sale
+      operationId: cancelSale
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Sale cancelled, or an existing cancellation safely repeated
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/sales/{id}/items/{itemId}/cancel:
+    post:
+      tags: [Sales]
+      summary: Cancel one sale item
+      operationId: cancelSaleItem
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+        - $ref: '#/components/parameters/ItemId'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Item cancelled, or an existing cancellation safely repeated
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  headers:
+    ETag:
+      description: Strong opaque token representing the current sale version.
+      schema:
+        type: string
+        example: '"sale-1"'
+    Location:
+      description: URI of the created sale.
+      schema:
+        type: string
+        format: uri-reference
+        example: /api/sales/8a1b7df3-921f-45cc-9dea-9131c6f8eb7f
+  parameters:
+    SaleId:
+      name: id
+      in: path
+      required: true
+      description: Internal sale identifier.
+      schema:
+        type: string
+        format: uuid
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      description: Internal sale item identifier.
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: One strong ETag previously returned for this sale. Wildcards are rejected.
+      schema:
+        type: string
+        example: '"sale-1"'
+    Page:
+      name: _page
+      in: query
+      description: One-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: _size
+      in: query
+      description: Number of records per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    Order:
+      name: _order
+      in: query
+      description: |
+        Comma-separated fields with optional `asc` or `desc`. Allowed fields are
+        `saleDate`, `saleNumber`, `totalAmount`, and `id`.
+      schema:
+        type: string
+        default: saleDate desc,id asc
+      example: saleDate desc,saleNumber asc
+  schemas:
+    Money:
+      type: number
+      minimum: 0
+      maximum: 2000000000
+      multipleOf: 0.01
+      example: 36.00
+    ExternalIdentity:
+      type: object
+      additionalProperties: false
+      required: [externalId, name]
+      properties:
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: CUSTOMER-001
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Example Customer
+    CreateSaleItemRequest:
+      type: object
+      additionalProperties: false
+      required: [product, quantity, unitPrice]
+      properties:
+        product:
+          $ref: '#/components/schemas/ExternalIdentity'
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 20
+          example: 4
+        unitPrice:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 1000000
+          multipleOf: 0.01
+          example: 10.00
+    CreateSaleRequest:
+      type: object
+      additionalProperties: false
+      required: [saleNumber, saleDate, customer, branch, items]
+      properties:
+        saleNumber:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: SALE-0001
+        saleDate:
+          type: string
+          format: date-time
+          example: '2026-09-23T10:00:00-03:00'
+        customer:
+          $ref: '#/components/schemas/ExternalIdentity'
+        branch:
+          $ref: '#/components/schemas/ExternalIdentity'
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/CreateSaleItemRequest'
+    UpdateSaleItemRequest:
+      type: object
+      additionalProperties: false
+      required: [product, quantity, unitPrice]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Required for an existing active line and omitted for a new line.
+        product:
+          $ref: '#/components/schemas/ExternalIdentity'
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 20
+        unitPrice:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 1000000
+          multipleOf: 0.01
+    UpdateSaleRequest:
+      type: object
+      additionalProperties: false
+      required: [saleDate, customer, branch, items]
+      properties:
+        saleDate:
+          type: string
+          format: date-time
+        customer:
+          $ref: '#/components/schemas/ExternalIdentity'
+        branch:
+          $ref: '#/components/schemas/ExternalIdentity'
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Complete collection of active lines. Cancelled lines are omitted.
+          items:
+            $ref: '#/components/schemas/UpdateSaleItemRequest'
+    SaleItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - product
+        - quantity
+        - unitPrice
+        - discountRate
+        - grossAmount
+        - discountAmount
+        - totalAmount
+        - effectiveAmount
+        - isCancelled
+        - cancelledAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        product:
+          $ref: '#/components/schemas/ExternalIdentity'
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 20
+        unitPrice:
+          $ref: '#/components/schemas/Money'
+        discountRate:
+          type: number
+          enum: [0, 0.10, 0.20]
+          example: 0.10
+        grossAmount:
+          $ref: '#/components/schemas/Money'
+        discountAmount:
+          $ref: '#/components/schemas/Money'
+        totalAmount:
+          $ref: '#/components/schemas/Money'
+        effectiveAmount:
+          $ref: '#/components/schemas/Money'
+        isCancelled:
+          type: boolean
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+    Sale:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - saleNumber
+        - saleDate
+        - customer
+        - branch
+        - items
+        - totalAmount
+        - isCancelled
+        - cancelledAt
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        saleNumber:
+          type: string
+        saleDate:
+          type: string
+          format: date-time
+        customer:
+          $ref: '#/components/schemas/ExternalIdentity'
+        branch:
+          $ref: '#/components/schemas/ExternalIdentity'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleItem'
+        totalAmount:
+          $ref: '#/components/schemas/Money'
+        isCancelled:
+          type: boolean
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+    SaleSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - saleNumber
+        - saleDate
+        - customer
+        - branch
+        - totalAmount
+        - isCancelled
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        saleNumber:
+          type: string
+        saleDate:
+          type: string
+          format: date-time
+        customer:
+          $ref: '#/components/schemas/ExternalIdentity'
+        branch:
+          $ref: '#/components/schemas/ExternalIdentity'
+        totalAmount:
+          $ref: '#/components/schemas/Money'
+        isCancelled:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+    PagedSalesResponse:
+      type: object
+      additionalProperties: false
+      required: [data, totalItems, currentPage, totalPages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleSummary'
+        totalItems:
+          type: integer
+          format: int64
+          minimum: 0
+        currentPage:
+          type: integer
+          minimum: 1
+        totalPages:
+          type: integer
+          minimum: 0
+    ErrorDetail:
+      type: object
+      additionalProperties: false
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          example: items[0].quantity
+        code:
+          type: string
+          example: QuantityOutOfRange
+        message:
+          type: string
+          example: Quantity must be between 1 and 20.
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [type, error, detail]
+      properties:
+        type:
+          type: string
+          example: ValidationError
+        error:
+          type: string
+          example: Invalid input data
+        detail:
+          type: string
+          example: Correct the fields listed in errors.
+        traceId:
+          type: string
+          description: Correlation identifier for support and diagnostics.
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+  responses:
+    BadRequest:
+      description: Invalid request syntax, data, precondition token, or query semantics
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The authenticated identity cannot operate sales
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Sale or addressed item does not exist in the public resource view
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Duplicate sale number or transition forbidden by the current state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PreconditionFailed:
+      description: The supplied If-Match token is stale
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: Request body exceeds the configured 256 KiB limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnsupportedMediaType:
+      description: Request content type is not supported
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PreconditionRequired:
+      description: If-Match is required for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Unexpected failure without internal implementation details
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: A required dependency is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

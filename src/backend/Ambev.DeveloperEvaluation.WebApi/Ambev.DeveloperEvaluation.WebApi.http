@@ -1,6 +1,225 @@
-@Ambev.DeveloperEvaluation.WebApi_HostAddress = http://localhost:5119
+@host = http://localhost:8080
+@token = replace-with-a-manager-or-admin-jwt
+@saleId = 8a1b7df3-921f-45cc-9dea-9131c6f8eb7f
+@itemId = 3fd35493-1739-40c8-8f31-ee7cdb615fd7
+@etag = "sale-1"
 
-GET {{Ambev.DeveloperEvaluation.WebApi_HostAddress}}/weatherforecast/
+### Create a sale: exactly four units receive a 10% discount
+# @name createSale
+POST {{host}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
 Accept: application/json
 
-###
+{
+  "saleNumber": "SALE-0001",
+  "saleDate": "2026-09-23T10:00:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-001",
+    "name": "Example Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 4,
+      "unitPrice": 10.00
+    }
+  ]
+}
+
+### Retrieve a sale and copy its ETag response header before a mutation
+GET {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### List active and cancelled sales with stable ordering and inclusive ranges
+GET {{host}}/api/sales?_page=1&_size=10&_order=saleDate%20desc%2CsaleNumber%20asc&customerExternalId=CUSTOMER-001&isCancelled=false&isCancelled=true&_minSaleDate=2026-01-01T00%3A00%3A00Z&_maxTotalAmount=1000.00
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Update a sale: send every active line and the latest ETag
+PUT {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
+If-Match: {{etag}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "saleDate": "2026-09-23T10:15:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-001",
+    "name": "Example Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "id": "{{itemId}}",
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 10,
+      "unitPrice": 10.00
+    },
+    {
+      "product": {
+        "externalId": "PRODUCT-002",
+        "name": "Another Product"
+      },
+      "quantity": 2,
+      "unitPrice": 5.50
+    }
+  ]
+}
+
+### Cancel one item; cancelling the last active item also cancels the sale
+POST {{host}}/api/sales/{{saleId}}/items/{{itemId}}/cancel
+Authorization: Bearer {{token}}
+If-Match: {{etag}}
+Accept: application/json
+
+### Cancel a sale
+POST {{host}}/api/sales/{{saleId}}/cancel
+Authorization: Bearer {{token}}
+If-Match: {{etag}}
+Accept: application/json
+
+### Soft-delete a sale
+DELETE {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
+If-Match: {{etag}}
+
+### Validation failure: quantity above 20
+POST {{host}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "saleNumber": "SALE-INVALID-QUANTITY",
+  "saleDate": "2026-09-23T10:00:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-001",
+    "name": "Example Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 21,
+      "unitPrice": 10.00
+    }
+  ]
+}
+
+### Validation failure: duplicate product external ID
+POST {{host}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "saleNumber": "SALE-DUPLICATE-PRODUCT",
+  "saleDate": "2026-09-23T10:00:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-001",
+    "name": "Example Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 2,
+      "unitPrice": 10.00
+    },
+    {
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 3,
+      "unitPrice": 10.00
+    }
+  ]
+}
+
+### Conflict: create another sale with an existing normalized sale number
+POST {{host}}/api/sales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "saleNumber": " sale-0001 ",
+  "saleDate": "2026-09-23T10:00:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-002",
+    "name": "Second Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "product": {
+        "externalId": "PRODUCT-002",
+        "name": "Another Product"
+      },
+      "quantity": 1,
+      "unitPrice": 5.50
+    }
+  ]
+}
+
+### Precondition failure: replace with an old ETag after another mutation
+PUT {{host}}/api/sales/{{saleId}}
+Authorization: Bearer {{token}}
+If-Match: "sale-1"
+Content-Type: application/json
+Accept: application/json
+
+{
+  "saleDate": "2026-09-23T10:15:00-03:00",
+  "customer": {
+    "externalId": "CUSTOMER-001",
+    "name": "Example Customer"
+  },
+  "branch": {
+    "externalId": "BRANCH-FOR",
+    "name": "Fortaleza Branch"
+  },
+  "items": [
+    {
+      "id": "{{itemId}}",
+      "product": {
+        "externalId": "PRODUCT-001",
+        "name": "Example Product"
+      },
+      "quantity": 10,
+      "unitPrice": 10.00
+    }
+  ]
+}
