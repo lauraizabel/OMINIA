@@ -3,22 +3,22 @@ using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using MediatR;
 
-namespace Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
+namespace Ambev.DeveloperEvaluation.Application.Sales.CancelSale;
 
-public sealed class UpdateSaleHandler : IRequestHandler<UpdateSaleCommand, SaleResult>
+public sealed class CancelSaleHandler : IRequestHandler<CancelSaleCommand, SaleResult>
 {
     private readonly ISaleRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
 
-    public UpdateSaleHandler(ISaleRepository repository, IUnitOfWork unitOfWork, TimeProvider timeProvider)
+    public CancelSaleHandler(ISaleRepository repository, IUnitOfWork unitOfWork, TimeProvider timeProvider)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
     }
 
-    public async Task<SaleResult> Handle(UpdateSaleCommand command, CancellationToken cancellationToken)
+    public async Task<SaleResult> Handle(CancelSaleCommand command, CancellationToken cancellationToken)
     {
         var sale = await _repository.GetByIdAsync(command.Id, cancellationToken)
             ?? throw new DomainNotFoundException(
@@ -26,15 +26,7 @@ public sealed class UpdateSaleHandler : IRequestHandler<UpdateSaleCommand, SaleR
                 $"Sale '{command.Id}' was not found.");
 
         SaleVersionGuard.EnsureMatches(sale, command.ExpectedVersion);
-
-        var changed = sale.Update(
-            command.SaleDate,
-            command.Customer.ToDomain(),
-            command.Branch.ToDomain(),
-            command.Items.Select(item => item.ToDomain()),
-            _timeProvider.GetUtcNow());
-
-        if (changed)
+        if (sale.Cancel(_timeProvider.GetUtcNow()))
             await _unitOfWork.CommitAsync(cancellationToken);
 
         return SaleResult.From(sale);

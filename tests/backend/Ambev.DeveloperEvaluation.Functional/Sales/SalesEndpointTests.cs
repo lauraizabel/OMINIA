@@ -8,6 +8,9 @@ using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSale;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
+using Ambev.DeveloperEvaluation.Application.Sales.CancelSale;
+using Ambev.DeveloperEvaluation.Application.Sales.CancelSaleItem;
+using Ambev.DeveloperEvaluation.Application.Sales.DeleteSale;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 using Ambev.DeveloperEvaluation.WebApi;
 using MediatR;
@@ -28,6 +31,81 @@ namespace Ambev.DeveloperEvaluation.Functional.Sales;
 public sealed class SalesEndpointTests
 {
     private static readonly Guid SaleId = Guid.Parse("99cc2492-c255-44c8-8eb8-87709bed5290");
+    private static readonly Guid ItemId = Guid.Parse("57483932-d678-473a-a890-f91877cece36");
+
+    [Fact]
+    public async Task Cancel_sale_forwards_version_and_returns_updated_etag()
+    {
+        var mediator = Substitute.For<IMediator>();
+        mediator.Send(Arg.Any<CancelSaleCommand>(), Arg.Any<CancellationToken>()).Returns(Result(2));
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/sales/{SaleId}/cancel");
+        request.Headers.TryAddWithoutValidation("If-Match", "\"sale-1\"");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("\"sale-2\"", response.Headers.ETag?.Tag);
+        await mediator.Received(1).Send(
+            Arg.Is<CancelSaleCommand>(command => command.Id == SaleId && command.ExpectedVersion == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cancel_item_forwards_both_ids_and_version()
+    {
+        var mediator = Substitute.For<IMediator>();
+        mediator.Send(Arg.Any<CancelSaleItemCommand>(), Arg.Any<CancellationToken>()).Returns(Result(2));
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/sales/{SaleId}/items/{ItemId}/cancel");
+        request.Headers.TryAddWithoutValidation("If-Match", "\"sale-1\"");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("\"sale-2\"", response.Headers.ETag?.Tag);
+        await mediator.Received(1).Send(
+            Arg.Is<CancelSaleItemCommand>(command =>
+                command.SaleId == SaleId && command.ItemId == ItemId && command.ExpectedVersion == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Delete_returns_204_and_forwards_version()
+    {
+        var mediator = Substitute.For<IMediator>();
+        mediator.Send(Arg.Any<DeleteSaleCommand>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/sales/{SaleId}");
+        request.Headers.TryAddWithoutValidation("If-Match", "\"sale-1\"");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        await mediator.Received(1).Send(
+            Arg.Is<DeleteSaleCommand>(command => command.Id == SaleId && command.ExpectedVersion == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cancellation_without_if_match_returns_428_without_dispatching()
+    {
+        var mediator = Substitute.For<IMediator>();
+        await using var factory = CreateFactory(mediator);
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync($"/api/sales/{SaleId}/cancel", null);
+
+        Assert.Equal((HttpStatusCode)428, response.StatusCode);
+        await AssertProblemType(response, "PreconditionRequired");
+        await mediator.DidNotReceive().Send(Arg.Any<CancelSaleCommand>(), Arg.Any<CancellationToken>());
+    }
 
     [Fact]
     public async Task List_returns_direct_paged_summaries_and_forwards_typed_criteria()
@@ -234,7 +312,7 @@ public sealed class SalesEndpointTests
         new ExternalIdentityResult("CUSTOMER-001", "Customer"),
         new ExternalIdentityResult("BRANCH-001", "Branch"),
         [new SaleItemResult(
-            Guid.Parse("57483932-d678-473a-a890-f91877cece36"),
+            ItemId,
             new ExternalIdentityResult("PRODUCT-001", "Product"),
             4,
             10m,

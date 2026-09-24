@@ -2,6 +2,9 @@ using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSale;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
+using Ambev.DeveloperEvaluation.Application.Sales.CancelSale;
+using Ambev.DeveloperEvaluation.Application.Sales.CancelSaleItem;
+using Ambev.DeveloperEvaluation.Application.Sales.DeleteSale;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using Ambev.DeveloperEvaluation.WebApi.Security;
 using MediatR;
@@ -83,5 +86,56 @@ public sealed class SalesController : ControllerBase
 
         Response.Headers.ETag = SaleEtag.Create(result.Version);
         return Ok(SaleResponse.From(result));
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(SaleResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<SaleResponse>> CancelSale(Guid id, CancellationToken cancellationToken)
+    {
+        var expectedVersion = SaleEtag.ParseRequired(Request.Headers.IfMatch.ToString());
+        var result = await _mediator.Send(
+            new CancelSaleCommand(id, expectedVersion),
+            cancellationToken);
+
+        Response.Headers.ETag = SaleEtag.Create(result.Version);
+        return Ok(SaleResponse.From(result));
+    }
+
+    [HttpPost("{id:guid}/items/{itemId:guid}/cancel")]
+    [ProducesResponseType(typeof(SaleResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<SaleResponse>> CancelSaleItem(
+        Guid id,
+        Guid itemId,
+        CancellationToken cancellationToken)
+    {
+        var expectedVersion = SaleEtag.ParseRequired(Request.Headers.IfMatch.ToString());
+        var result = await _mediator.Send(
+            new CancelSaleItemCommand(id, itemId, expectedVersion),
+            cancellationToken);
+
+        Response.Headers.ETag = SaleEtag.Create(result.Version);
+        return Ok(SaleResponse.From(result));
+    }
+
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status428PreconditionRequired)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var expectedVersion = SaleEtag.ParseRequired(Request.Headers.IfMatch.ToString());
+        await _mediator.Send(new DeleteSaleCommand(id, expectedVersion), cancellationToken);
+        return NoContent();
     }
 }
