@@ -45,8 +45,8 @@ public sealed class Sale
         var normalizedNumber = NormalizeSaleNumber(saleNumber);
         var normalizedNow = now.ToUniversalTime();
         var normalizedSaleDate = ValidateSaleDate(saleDate, normalizedNow);
-        var validatedCustomer = RequireIdentity(customer, "Sale.CustomerRequired", "Customer");
-        var validatedBranch = RequireIdentity(branch, "Sale.BranchRequired", "Branch");
+        var validatedCustomer = RequireIdentity(customer, RequiredIdentity.Customer);
+        var validatedBranch = RequireIdentity(branch, RequiredIdentity.Branch);
         var drafts = MaterializeDrafts(items);
 
         if (drafts.Any(item => item.Id.HasValue))
@@ -98,8 +98,8 @@ public sealed class Sale
 
         var normalizedNow = ValidateOperationTime(now);
         var normalizedSaleDate = ValidateSaleDate(saleDate, normalizedNow);
-        var validatedCustomer = RequireIdentity(customer, "Sale.CustomerRequired", "Customer");
-        var validatedBranch = RequireIdentity(branch, "Sale.BranchRequired", "Branch");
+        var validatedCustomer = RequireIdentity(customer, RequiredIdentity.Customer);
+        var validatedBranch = RequireIdentity(branch, RequiredIdentity.Branch);
         var drafts = MaterializeDrafts(activeItems);
 
         var cancelledItems = _items.Where(item => item.IsCancelled).ToArray();
@@ -299,15 +299,32 @@ public sealed class Sale
 
     private static ExternalIdentity RequireIdentity(
         ExternalIdentity? identity,
-        string code,
-        string fieldName)
+        RequiredIdentity requiredIdentity)
     {
-        return identity ?? throw new DomainValidationException(code, $"{fieldName} is required.");
+        if (identity is not null)
+            return identity;
+
+        var (code, message) = requiredIdentity switch
+        {
+            RequiredIdentity.Customer => ("Sale.CustomerRequired", "Customer is required."),
+            RequiredIdentity.Branch => ("Sale.BranchRequired", "Branch is required."),
+            RequiredIdentity.Product => ("SaleItem.ProductRequired", "Product is required."),
+            _ => throw new ArgumentOutOfRangeException(nameof(requiredIdentity), requiredIdentity, null)
+        };
+
+        throw new DomainValidationException(code, message);
     }
 
     private static ExternalIdentity RequireProduct(ExternalIdentity? product)
     {
-        return RequireIdentity(product, "SaleItem.ProductRequired", "Product");
+        return RequireIdentity(product, RequiredIdentity.Product);
+    }
+
+    private enum RequiredIdentity
+    {
+        Customer,
+        Branch,
+        Product
     }
 
     private static List<SaleItemDraft> MaterializeDrafts(IEnumerable<SaleItemDraft?>? items)

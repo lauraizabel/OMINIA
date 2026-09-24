@@ -52,6 +52,31 @@ public sealed class SaleTests
         sale.TotalAmount.Should().Be(66m);
     }
 
+    [Theory]
+    [InlineData("customer", "Sale.CustomerRequired")]
+    [InlineData("branch", "Sale.BranchRequired")]
+    [InlineData("product", "SaleItem.ProductRequired")]
+    public void Create_ShouldReturnSpecificCodeWhenRequiredIdentityIsMissing(
+        string missingIdentity,
+        string expectedCode)
+    {
+        var customer = missingIdentity == "customer" ? null : SaleTestData.Customer();
+        var branch = missingIdentity == "branch" ? null : SaleTestData.Branch();
+        var product = missingIdentity == "product" ? null : SaleTestData.Product(1);
+
+        var action = () => Sale.Create(
+            "SALE-0001",
+            SaleTestData.Now,
+            customer,
+            branch,
+            [SaleItemDraft.New(product!, 1, 10m)],
+            SaleTestData.Now);
+
+        action.Should()
+            .Throw<DomainValidationException>()
+            .Which.Code.Should().Be(expectedCode);
+    }
+
     [Fact]
     public void Create_ShouldRejectDuplicateProductAfterTrimming()
     {
