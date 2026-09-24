@@ -9,5 +9,6 @@ public class ApplicationModuleInitializer : IModuleInitializer
     public void Initialize(WebApplicationBuilder builder)
     {
         builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        builder.Services.AddSingleton(TimeProvider.System);
     }
 }

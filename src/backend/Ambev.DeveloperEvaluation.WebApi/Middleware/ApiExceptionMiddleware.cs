@@ -3,6 +3,7 @@ using Ambev.DeveloperEvaluation.WebApi.Common;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Ambev.DeveloperEvaluation.WebApi.Features.Sales;
 
 namespace Ambev.DeveloperEvaluation.WebApi.Middleware;
 
@@ -48,6 +49,18 @@ public sealed class ApiExceptionMiddleware
                 context, StatusCodes.Status404NotFound, ApiErrorTypes.ResourceNotFound, "Resource not found", notFound),
             DomainConflictException conflict => WriteDomainAsync(
                 context, StatusCodes.Status409Conflict, ApiErrorTypes.Conflict, "The request conflicts with the current state", conflict),
+            DomainConcurrencyException concurrency => WriteDomainAsync(
+                context, StatusCodes.Status412PreconditionFailed, ApiErrorTypes.ConcurrencyConflict, "The resource has changed", concurrency),
+            HttpPreconditionException precondition => ApiErrorWriter.WriteAsync(
+                context,
+                precondition.StatusCode,
+                precondition.StatusCode == StatusCodes.Status428PreconditionRequired
+                    ? ApiErrorTypes.PreconditionRequired
+                    : ApiErrorTypes.InvalidRequest,
+                precondition.StatusCode == StatusCodes.Status428PreconditionRequired
+                    ? "A required precondition is missing"
+                    : "Invalid request",
+                precondition.Message),
             UnauthorizedAccessException => ApiErrorWriter.WriteAsync(
                 context,
                 StatusCodes.Status401Unauthorized,

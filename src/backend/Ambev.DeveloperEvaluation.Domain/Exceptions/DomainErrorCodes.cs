@@ -14,13 +14,18 @@ public static class DomainErrorCodes
         public const string Cancelled = "Sale.Cancelled";
         public const string CustomerRequired = "Sale.CustomerRequired";
         public const string DateTooFarInFuture = "Sale.DateTooFarInFuture";
+        public const string DateRequired = "Sale.DateRequired";
         public const string Deleted = "Sale.Deleted";
         public const string ItemsRequired = "Sale.ItemsRequired";
+        public const string InvalidId = "Sale.InvalidId";
         public const string NumberContainsControlCharacter = "Sale.NumberContainsControlCharacter";
         public const string NumberRequired = "Sale.NumberRequired";
         public const string NumberTooLong = "Sale.NumberTooLong";
+        public const string NumberAlreadyExists = "Sale.NumberAlreadyExists";
+        public const string NotFound = "Sale.NotFound";
         public const string OperationBeforeCreation = "Sale.OperationBeforeCreation";
         public const string TooManyItems = "Sale.TooManyItems";
+        public const string VersionConflict = "Sale.VersionConflict";
     }
 
     public static class SaleItem
