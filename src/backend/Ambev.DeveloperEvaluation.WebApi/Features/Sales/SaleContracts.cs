@@ -6,37 +6,37 @@ namespace Ambev.DeveloperEvaluation.WebApi.Features.Sales;
 
 public sealed class ListSalesRequest
 {
-    [FromQuery(Name = "_page")]
+    [FromQuery(Name = SaleListQueryParameters.Page)]
     public int? Page { get; init; }
 
-    [FromQuery(Name = "_size")]
+    [FromQuery(Name = SaleListQueryParameters.PageSize)]
     public int? PageSize { get; init; }
 
-    [FromQuery(Name = "_order")]
+    [FromQuery(Name = SaleListQueryParameters.Order)]
     public string? Order { get; init; }
 
-    [FromQuery(Name = "saleNumber")]
+    [FromQuery(Name = SaleListQueryParameters.SaleNumber)]
     public string? SaleNumber { get; init; }
 
-    [FromQuery(Name = "customerExternalId")]
+    [FromQuery(Name = SaleListQueryParameters.CustomerExternalId)]
     public string[] CustomerExternalIds { get; init; } = [];
 
-    [FromQuery(Name = "branchExternalId")]
+    [FromQuery(Name = SaleListQueryParameters.BranchExternalId)]
     public string[] BranchExternalIds { get; init; } = [];
 
-    [FromQuery(Name = "isCancelled")]
+    [FromQuery(Name = SaleListQueryParameters.IsCancelled)]
     public bool[] CancellationStates { get; init; } = [];
 
-    [FromQuery(Name = "_minSaleDate")]
+    [FromQuery(Name = SaleListQueryParameters.MinimumSaleDate)]
     public DateTimeOffset? MinimumSaleDate { get; init; }
 
-    [FromQuery(Name = "_maxSaleDate")]
+    [FromQuery(Name = SaleListQueryParameters.MaximumSaleDate)]
     public DateTimeOffset? MaximumSaleDate { get; init; }
 
-    [FromQuery(Name = "_minTotalAmount")]
+    [FromQuery(Name = SaleListQueryParameters.MinimumTotalAmount)]
     public decimal? MinimumTotalAmount { get; init; }
 
-    [FromQuery(Name = "_maxTotalAmount")]
+    [FromQuery(Name = SaleListQueryParameters.MaximumTotalAmount)]
     public decimal? MaximumTotalAmount { get; init; }
 }
 

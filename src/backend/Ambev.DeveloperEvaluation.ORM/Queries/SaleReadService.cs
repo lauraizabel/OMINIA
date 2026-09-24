@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq.Expressions;
 using Ambev.DeveloperEvaluation.Application.Sales.Common;
 using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.Domain.Entities;
@@ -9,6 +10,18 @@ namespace Ambev.DeveloperEvaluation.ORM.Queries;
 public sealed class SaleReadService : ISaleReadService
 {
     private const string LikeEscapeCharacter = "\\";
+    private static readonly Expression<Func<Sale, SaleSummaryResult>> SummaryProjection = sale =>
+        new SaleSummaryResult(
+            sale.Id,
+            sale.SaleNumber,
+            sale.SaleDate,
+            new ExternalIdentityResult(sale.Customer.ExternalId, sale.Customer.Name),
+            new ExternalIdentityResult(sale.Branch.ExternalId, sale.Branch.Name),
+            sale.TotalAmount,
+            sale.IsCancelled,
+            sale.UpdatedAt,
+            sale.Version);
+
     private readonly DefaultContext _context;
 
     public SaleReadService(DefaultContext context) => _context = context;
@@ -31,16 +44,7 @@ public sealed class SaleReadService : ISaleReadService
         var data = await ApplyOrder(query, criteria.Order)
             .Skip(offset)
             .Take(criteria.PageSize)
-            .Select(sale => new SaleSummaryResult(
-                sale.Id,
-                sale.SaleNumber,
-                sale.SaleDate,
-                new ExternalIdentityResult(sale.Customer.ExternalId, sale.Customer.Name),
-                new ExternalIdentityResult(sale.Branch.ExternalId, sale.Branch.Name),
-                sale.TotalAmount,
-                sale.IsCancelled,
-                sale.UpdatedAt,
-                sale.Version))
+            .Select(SummaryProjection)
             .ToArrayAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
@@ -53,20 +57,7 @@ public sealed class SaleReadService : ISaleReadService
 
     private static IQueryable<Sale> ApplyFilters(IQueryable<Sale> query, SaleListCriteria criteria)
     {
-        if (criteria.SaleNumber is not null)
-        {
-            var filter = criteria.SaleNumber;
-            if (!filter.MatchStart && !filter.MatchEnd)
-            {
-                query = query.Where(sale => sale.SaleNumber == filter.Value);
-            }
-            else
-            {
-                var escaped = EscapeLikePattern(filter.Value);
-                var pattern = $"{(filter.MatchStart ? "%" : string.Empty)}{escaped}{(filter.MatchEnd ? "%" : string.Empty)}";
-                query = query.Where(sale => EF.Functions.Like(sale.SaleNumber, pattern, LikeEscapeCharacter));
-            }
-        }
+        query = ApplySaleNumberFilter(query, criteria.SaleNumber);
 
         if (criteria.CustomerExternalIds.Count > 0)
             query = query.Where(sale => criteria.CustomerExternalIds.Contains(sale.Customer.ExternalId));
@@ -92,6 +83,21 @@ public sealed class SaleReadService : ISaleReadService
         return query;
     }
 
+    private static IQueryable<Sale> ApplySaleNumberFilter(
+        IQueryable<Sale> query,
+        SaleNumberFilter? filter)
+    {
+        if (filter is null)
+            return query;
+
+        if (!filter.MatchStart && !filter.MatchEnd)
+            return query.Where(sale => sale.SaleNumber == filter.Value);
+
+        var escaped = EscapeLikePattern(filter.Value);
+        var pattern = $"{(filter.MatchStart ? "%" : string.Empty)}{escaped}{(filter.MatchEnd ? "%" : string.Empty)}";
+        return query.Where(sale => EF.Functions.Like(sale.SaleNumber, pattern, LikeEscapeCharacter));
+    }
+
     private static IOrderedQueryable<Sale> ApplyOrder(
         IQueryable<Sale> query,
         IReadOnlyCollection<SaleOrder> terms)
@@ -108,26 +114,32 @@ public sealed class SaleReadService : ISaleReadService
         IOrderedQueryable<Sale>? ordered,
         SaleOrder term)
     {
-        return (term.Field, term.Direction, ordered) switch
+        return term.Field switch
         {
-            (SaleOrderField.SaleDate, SortDirection.Ascending, null) => query.OrderBy(sale => sale.SaleDate),
-            (SaleOrderField.SaleDate, SortDirection.Descending, null) => query.OrderByDescending(sale => sale.SaleDate),
-            (SaleOrderField.SaleNumber, SortDirection.Ascending, null) => query.OrderBy(sale => sale.SaleNumber),
-            (SaleOrderField.SaleNumber, SortDirection.Descending, null) => query.OrderByDescending(sale => sale.SaleNumber),
-            (SaleOrderField.TotalAmount, SortDirection.Ascending, null) => query.OrderBy(sale => sale.TotalAmount),
-            (SaleOrderField.TotalAmount, SortDirection.Descending, null) => query.OrderByDescending(sale => sale.TotalAmount),
-            (SaleOrderField.Id, SortDirection.Ascending, null) => query.OrderBy(sale => sale.Id),
-            (SaleOrderField.Id, SortDirection.Descending, null) => query.OrderByDescending(sale => sale.Id),
-            (SaleOrderField.SaleDate, SortDirection.Ascending, _) => ordered.ThenBy(sale => sale.SaleDate),
-            (SaleOrderField.SaleDate, SortDirection.Descending, _) => ordered.ThenByDescending(sale => sale.SaleDate),
-            (SaleOrderField.SaleNumber, SortDirection.Ascending, _) => ordered.ThenBy(sale => sale.SaleNumber),
-            (SaleOrderField.SaleNumber, SortDirection.Descending, _) => ordered.ThenByDescending(sale => sale.SaleNumber),
-            (SaleOrderField.TotalAmount, SortDirection.Ascending, _) => ordered.ThenBy(sale => sale.TotalAmount),
-            (SaleOrderField.TotalAmount, SortDirection.Descending, _) => ordered.ThenByDescending(sale => sale.TotalAmount),
-            (SaleOrderField.Id, SortDirection.Ascending, _) => ordered.ThenBy(sale => sale.Id),
-            (SaleOrderField.Id, SortDirection.Descending, _) => ordered.ThenByDescending(sale => sale.Id),
+            SaleOrderField.SaleDate => ApplyDirection(query, ordered, term.Direction, sale => sale.SaleDate),
+            SaleOrderField.SaleNumber => ApplyDirection(query, ordered, term.Direction, sale => sale.SaleNumber),
+            SaleOrderField.TotalAmount => ApplyDirection(query, ordered, term.Direction, sale => sale.TotalAmount),
+            SaleOrderField.Id => ApplyDirection(query, ordered, term.Direction, sale => sale.Id),
             _ => throw new ArgumentOutOfRangeException(nameof(term))
         };
+    }
+
+    private static IOrderedQueryable<Sale> ApplyDirection<TKey>(
+        IQueryable<Sale> query,
+        IOrderedQueryable<Sale>? ordered,
+        SortDirection direction,
+        Expression<Func<Sale, TKey>> keySelector)
+    {
+        if (ordered is null)
+        {
+            return direction == SortDirection.Ascending
+                ? query.OrderBy(keySelector)
+                : query.OrderByDescending(keySelector);
+        }
+
+        return direction == SortDirection.Ascending
+            ? ordered.ThenBy(keySelector)
+            : ordered.ThenByDescending(keySelector);
     }
 
     private static string EscapeLikePattern(string value) => value
