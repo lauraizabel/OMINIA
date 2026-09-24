@@ -5,7 +5,7 @@ using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Common.Validation;
 using Ambev.DeveloperEvaluation.IoC;
 using Ambev.DeveloperEvaluation.ORM;
-using Ambev.DeveloperEvaluation.WebApi.Middleware;
+using Ambev.DeveloperEvaluation.WebApi.Configuration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -23,7 +23,7 @@ public class Program
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
             builder.AddDefaultLogging();
 
-            builder.Services.AddControllers();
+            builder.Services.AddApiProtection();
             builder.Services.AddEndpointsApiExplorer();
 
             builder.AddBasicHealthChecks();
@@ -52,8 +52,15 @@ public class Program
 
             builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services.Configure<DevelopmentAdminOptions>(
+                    builder.Configuration.GetSection(DevelopmentAdminOptions.SectionName));
+                builder.Services.AddHostedService<DevelopmentAdminSeeder>();
+            }
+
             var app = builder.Build();
-            app.UseMiddleware<ValidationExceptionMiddleware>();
+            app.UseApiProtection();
 
             if (app.Environment.IsDevelopment())
             {
@@ -75,6 +82,7 @@ public class Program
         catch (Exception ex)
         {
             Log.Fatal(ex, "Application terminated unexpectedly");
+            throw;
         }
         finally
         {

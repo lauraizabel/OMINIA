@@ -2,6 +2,12 @@ namespace Ambev.DeveloperEvaluation.Domain.Exceptions;
 
 public static class DomainErrorCodes
 {
+    public static class User
+    {
+        public const string EmailAlreadyExists = "User.EmailAlreadyExists";
+        public const string NotFound = "User.NotFound";
+    }
+
     public static class Sale
     {
         public const string BranchRequired = "Sale.BranchRequired";

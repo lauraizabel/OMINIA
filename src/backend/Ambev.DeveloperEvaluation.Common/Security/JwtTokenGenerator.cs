@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -12,16 +12,16 @@ namespace Ambev.DeveloperEvaluation.Common.Security;
 public class JwtTokenGenerator : IJwtTokenGenerator
 {
     private readonly byte[] _signingKey;
+    private readonly JwtOptions _options;
 
     /// <summary>
     /// Initializes a new instance of the JWT token generator.
     /// </summary>
-    /// <param name="configuration">Application configuration containing the necessary keys for token generation.</param>
-    public JwtTokenGenerator(IConfiguration configuration)
+    /// <param name="options">Validated JWT settings for token generation.</param>
+    public JwtTokenGenerator(IOptions<JwtOptions> options)
     {
-        var secretKey = configuration["Jwt:SecretKey"];
-        ArgumentException.ThrowIfNullOrWhiteSpace(secretKey);
-        _signingKey = Encoding.ASCII.GetBytes(secretKey);
+        _options = options.Value;
+        _signingKey = Encoding.UTF8.GetBytes(_options.SecretKey);
     }
 
     /// <summary>
@@ -51,7 +51,9 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddHours(8),
+            Issuer = _options.Issuer,
+            Audience = _options.Audience,
+            Expires = DateTime.UtcNow.AddMinutes(_options.ExpirationMinutes),
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(_signingKey),
                 SecurityAlgorithms.HmacSha256Signature)

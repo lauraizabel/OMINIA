@@ -1,5 +1,6 @@
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
+using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.Domain.ValueObjects;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.ORM.Repositories;
@@ -89,10 +90,41 @@ public sealed class SalePersistenceTests
 
         await using var verificationContext = CreateContext();
         Assert.True(await verificationContext.Users.AnyAsync(user => user.Email == "legacy@example.com"));
+        Assert.True(await verificationContext.Users.AnyAsync(
+            user => user.NormalizedEmail == "LEGACY@EXAMPLE.COM"));
+        Assert.True(await DatabaseObjectExistsAsync(
+            verificationContext,
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes " +
+            "WHERE indexname = 'UX_Users_NormalizedEmail' AND indexdef LIKE 'CREATE UNIQUE INDEX%')"));
         Assert.True(await DatabaseObjectExistsAsync(
             verificationContext,
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +
             "WHERE table_schema = 'public' AND table_name = 'Sales')"));
+    }
+
+    [Fact]
+    public async Task UserRepository_ShouldFindEmailCaseInsensitivelyAndDatabaseShouldEnforceUniqueness()
+    {
+        await ResetDatabaseAsync();
+
+        await using (var firstContext = CreateContext())
+        {
+            var repository = new UserRepository(firstContext);
+            await repository.CreateAsync(CreateUser("  Admin@Example.com  "));
+        }
+
+        await using (var readContext = CreateContext())
+        {
+            var persisted = await new UserRepository(readContext).GetByEmailAsync("admin@example.COM");
+            Assert.NotNull(persisted);
+            Assert.Equal("Admin@Example.com", persisted.Email);
+            Assert.Equal("ADMIN@EXAMPLE.COM", persisted.NormalizedEmail);
+        }
+
+        await using var duplicateContext = CreateContext();
+        var duplicateRepository = new UserRepository(duplicateContext);
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            duplicateRepository.CreateAsync(CreateUser("ADMIN@example.com")));
     }
 
     [Fact]
@@ -315,6 +347,19 @@ public sealed class SalePersistenceTests
     private static ExternalIdentity Product(string id, string name = "Example Product")
     {
         return ExternalIdentity.Create(id, name);
+    }
+
+    private static User CreateUser(string email)
+    {
+        return new User
+        {
+            Username = "Test User",
+            Email = email,
+            Phone = "+5585999999999",
+            Password = "hashed-password",
+            Role = UserRole.Admin,
+            Status = UserStatus.Active
+        };
     }
 
     private static void UpdateQuantity(Sale sale, int quantity, DateTimeOffset now)

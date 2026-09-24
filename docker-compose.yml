@@ -9,6 +9,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__DefaultConnection=Host=ambev.developerevaluation.database;Port=5432;Database=developer_evaluation;Username=developer;Password=ev@luAt10n
+      - Jwt__SecretKey=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the environment}
+      - DevelopmentAdmin__Enabled=${DEVELOPMENT_ADMIN_ENABLED:-false}
+      - DevelopmentAdmin__Email=${DEVELOPMENT_ADMIN_EMAIL:-admin@example.com}
+      - DevelopmentAdmin__Password=${DEVELOPMENT_ADMIN_PASSWORD:-}
     ports:
       - "8080:8080"
     depends_on:
