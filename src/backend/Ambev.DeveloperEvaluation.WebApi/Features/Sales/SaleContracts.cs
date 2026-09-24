@@ -1,6 +1,44 @@
 using Ambev.DeveloperEvaluation.Application.Sales.Common;
+using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Ambev.DeveloperEvaluation.WebApi.Features.Sales;
+
+public sealed class ListSalesRequest
+{
+    [FromQuery(Name = SaleListQueryParameters.Page)]
+    public int? Page { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.PageSize)]
+    public int? PageSize { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.Order)]
+    public string? Order { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.SaleNumber)]
+    public string? SaleNumber { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.CustomerExternalId)]
+    public string[] CustomerExternalIds { get; init; } = [];
+
+    [FromQuery(Name = SaleListQueryParameters.BranchExternalId)]
+    public string[] BranchExternalIds { get; init; } = [];
+
+    [FromQuery(Name = SaleListQueryParameters.IsCancelled)]
+    public bool[] CancellationStates { get; init; } = [];
+
+    [FromQuery(Name = SaleListQueryParameters.MinimumSaleDate)]
+    public DateTimeOffset? MinimumSaleDate { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.MaximumSaleDate)]
+    public DateTimeOffset? MaximumSaleDate { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.MinimumTotalAmount)]
+    public decimal? MinimumTotalAmount { get; init; }
+
+    [FromQuery(Name = SaleListQueryParameters.MaximumTotalAmount)]
+    public decimal? MaximumTotalAmount { get; init; }
+}
 
 public sealed record ExternalIdentityRequest(string ExternalId, string Name)
 {
@@ -38,6 +76,42 @@ public sealed record UpdateSaleRequest(
     IReadOnlyCollection<UpdateSaleItemRequest> Items);
 
 public sealed record ExternalIdentityResponse(string ExternalId, string Name);
+
+public sealed record SaleSummaryResponse(
+    Guid Id,
+    string SaleNumber,
+    DateTimeOffset SaleDate,
+    ExternalIdentityResponse Customer,
+    ExternalIdentityResponse Branch,
+    decimal TotalAmount,
+    bool IsCancelled,
+    DateTimeOffset UpdatedAt,
+    long Version)
+{
+    public static SaleSummaryResponse From(SaleSummaryResult result) => new(
+        result.Id,
+        result.SaleNumber,
+        result.SaleDate,
+        new ExternalIdentityResponse(result.Customer.ExternalId, result.Customer.Name),
+        new ExternalIdentityResponse(result.Branch.ExternalId, result.Branch.Name),
+        result.TotalAmount,
+        result.IsCancelled,
+        result.UpdatedAt,
+        result.Version);
+}
+
+public sealed record PagedSalesResponse(
+    IReadOnlyCollection<SaleSummaryResponse> Data,
+    long TotalItems,
+    int CurrentPage,
+    long TotalPages)
+{
+    public static PagedSalesResponse From(PagedSalesResult result) => new(
+        result.Data.Select(SaleSummaryResponse.From).ToArray(),
+        result.TotalItems,
+        result.CurrentPage,
+        result.TotalPages);
+}
 
 public sealed record SaleItemResponse(
     Guid Id,

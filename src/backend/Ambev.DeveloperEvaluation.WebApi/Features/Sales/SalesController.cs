@@ -1,6 +1,7 @@
 using Ambev.DeveloperEvaluation.Application.Sales.CreateSale;
 using Ambev.DeveloperEvaluation.Application.Sales.GetSale;
 using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
+using Ambev.DeveloperEvaluation.Application.Sales.ListSales;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using Ambev.DeveloperEvaluation.WebApi.Security;
 using MediatR;
@@ -17,6 +18,18 @@ public sealed class SalesController : ControllerBase
     private readonly IMediator _mediator;
 
     public SalesController(IMediator mediator) => _mediator = mediator;
+
+    [HttpGet]
+    [ProducesResponseType(typeof(PagedSalesResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedSalesResponse>> List(
+        [FromQuery] ListSalesRequest _,
+        CancellationToken cancellationToken)
+    {
+        var query = SaleListRequestParser.Parse(Request.Query);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(PagedSalesResponse.From(result));
+    }
 
     [HttpPost]
     [ProducesResponseType(typeof(SaleResponse), StatusCodes.Status201Created)]
