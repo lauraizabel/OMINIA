@@ -53,9 +53,9 @@ public sealed class SaleTests
     }
 
     [Theory]
-    [InlineData("customer", "Sale.CustomerRequired")]
-    [InlineData("branch", "Sale.BranchRequired")]
-    [InlineData("product", "SaleItem.ProductRequired")]
+    [InlineData("customer", DomainErrorCodes.Sale.CustomerRequired)]
+    [InlineData("branch", DomainErrorCodes.Sale.BranchRequired)]
+    [InlineData("product", DomainErrorCodes.SaleItem.ProductRequired)]
     public void Create_ShouldReturnSpecificCodeWhenRequiredIdentityIsMissing(
         string missingIdentity,
         string expectedCode)
@@ -93,7 +93,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.DuplicateProduct");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.DuplicateProduct);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("Sale.ItemsRequired");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.ItemsRequired);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("Sale.ItemsRequired");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.ItemsRequired);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.Null");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.NullItem);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.IdNotAllowedOnCreate");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.IdNotAllowedOnCreate);
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("Sale.NumberTooLong");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.NumberTooLong);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("Sale.TooManyItems");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.TooManyItems);
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("Sale.DateTooFarInFuture");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.DateTooFarInFuture);
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.ActiveItemOmitted");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.ActiveItemOmitted);
         sale.Items[0].Quantity.Should().Be(1);
         sale.TotalAmount.Should().Be(totalBefore);
         sale.Version.Should().Be(1);
@@ -405,7 +405,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.ProductIsImmutable");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.ProductIsImmutable);
     }
 
     [Fact]
@@ -529,7 +529,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainConflictException>()
-            .Which.Code.Should().Be("Sale.Cancelled");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.Cancelled);
     }
 
     [Fact]
@@ -554,7 +554,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.DuplicateProduct");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.DuplicateProduct);
     }
 
     [Fact]
@@ -576,7 +576,7 @@ public sealed class SaleTests
         var action = () => sale.Cancel(SaleTestData.Now.AddMinutes(2));
         action.Should()
             .Throw<DomainConflictException>()
-            .Which.Code.Should().Be("Sale.Deleted");
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.Deleted);
     }
 
     [Fact]
@@ -604,7 +604,7 @@ public sealed class SaleTests
 
         action.Should()
             .Throw<DomainNotFoundException>()
-            .Which.Code.Should().Be("SaleItem.NotFound");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.NotFound);
         sale.TotalAmount.Should().Be(totalBefore);
         sale.Version.Should().Be(1);
         sale.DomainEvents.Should().BeEmpty();

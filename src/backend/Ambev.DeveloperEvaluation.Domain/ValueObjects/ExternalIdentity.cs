@@ -25,13 +25,13 @@ public sealed record ExternalIdentity
         var normalizedId = Normalize(
             externalId,
             ExternalIdMaximumLength,
-            "ExternalIdentity.InvalidId",
+            DomainErrorCodes.ExternalIdentity.InvalidId,
             "External ID");
 
         var normalizedName = Normalize(
             name,
             NameMaximumLength,
-            "ExternalIdentity.InvalidName",
+            DomainErrorCodes.ExternalIdentity.InvalidName,
             "External identity name");
 
         return new ExternalIdentity(normalizedId, normalizedName);

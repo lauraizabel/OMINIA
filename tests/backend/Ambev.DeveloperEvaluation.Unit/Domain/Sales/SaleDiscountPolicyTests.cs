@@ -66,7 +66,7 @@ public sealed class SaleDiscountPolicyTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("SaleItem.QuantityOutOfRange");
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.QuantityOutOfRange);
     }
 
     [Theory]

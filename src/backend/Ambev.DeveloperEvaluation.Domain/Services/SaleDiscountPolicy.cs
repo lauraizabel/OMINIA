@@ -38,7 +38,7 @@ public static class SaleDiscountPolicy
     {
         if (quantity is < MinimumQuantity or > MaximumQuantity)
             throw new DomainValidationException(
-                "SaleItem.QuantityOutOfRange",
+                DomainErrorCodes.SaleItem.QuantityOutOfRange,
                 $"Quantity must be between {MinimumQuantity} and {MaximumQuantity}.");
     }
 
@@ -46,13 +46,13 @@ public static class SaleDiscountPolicy
     {
         if (unitPrice <= 0 || unitPrice > MaximumUnitPrice)
             throw new DomainValidationException(
-                "SaleItem.UnitPriceOutOfRange",
+                DomainErrorCodes.SaleItem.UnitPriceOutOfRange,
                 $"Unit price must be greater than zero and at most {MaximumUnitPrice:F2}.");
 
         var scale = (decimal.GetBits(unitPrice)[3] >> 16) & 0x7F;
         if (scale > 2)
             throw new DomainValidationException(
-                "SaleItem.UnitPriceScaleExceeded",
+                DomainErrorCodes.SaleItem.UnitPriceScaleExceeded,
                 "Unit price must contain at most two decimal places.");
     }
 }

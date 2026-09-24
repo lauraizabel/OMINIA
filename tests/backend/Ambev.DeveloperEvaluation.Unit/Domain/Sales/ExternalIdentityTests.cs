@@ -27,7 +27,7 @@ public sealed class ExternalIdentityTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("ExternalIdentity.InvalidId");
+            .Which.Code.Should().Be(DomainErrorCodes.ExternalIdentity.InvalidId);
     }
 
     [Fact]
@@ -51,6 +51,6 @@ public sealed class ExternalIdentityTests
 
         action.Should()
             .Throw<DomainValidationException>()
-            .Which.Code.Should().Be("ExternalIdentity.InvalidName");
+            .Which.Code.Should().Be(DomainErrorCodes.ExternalIdentity.InvalidName);
     }
 }
