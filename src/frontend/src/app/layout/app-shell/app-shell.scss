@@ -1,0 +1,97 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: var(--surface);
+}
+
+header {
+  display: grid;
+  min-height: 4.5rem;
+  align-items: center;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 2rem;
+  padding: 0 4vw;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--ink);
+  font-weight: 850;
+  text-decoration: none;
+}
+.brand span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.55rem;
+  color: #fff;
+  background: var(--primary);
+}
+nav a {
+  padding: 1.55rem 0.5rem 1.35rem;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-weight: 750;
+  text-decoration: none;
+}
+nav a.active {
+  border-color: var(--primary);
+  color: var(--ink);
+}
+.account {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+.account-copy {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
+.account-copy strong {
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+.account-copy small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.account button {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+main {
+  width: min(90rem, 100%);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 4rem);
+}
+
+@media (max-width: 650px) {
+  header {
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    padding: 0 1rem;
+  }
+  nav {
+    display: none;
+  }
+  .account-copy {
+    display: none;
+  }
+  main {
+    padding: 1.25rem;
+  }
+}

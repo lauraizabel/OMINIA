@@ -1,0 +1,34 @@
+:root {
+  --accent: #51e2c1;
+  --accent-strong: #75efd3;
+  --primary: #0c5f80;
+  --primary-hover: #084965;
+  --ink: #102535;
+  --muted: #607484;
+  --border: #cbd7de;
+  --surface: #f4f7f8;
+  --display-font: 'Aptos Display', 'Segoe UI', sans-serif;
+  color-scheme: light;
+  font-family: 'Aptos', 'Segoe UI', sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  min-width: 320px;
+  background: var(--surface);
+}
+body {
+  min-height: 100dvh;
+  margin: 0;
+}
+button,
+input {
+  font: inherit;
+}
+:focus-visible {
+  outline: 3px solid rgba(12, 95, 128, 0.35);
+  outline-offset: 2px;
+}

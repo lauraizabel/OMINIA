@@ -1,0 +1,21 @@
+<div class="shell">
+  <header>
+    <a class="brand" routerLink="/sales">
+      <span aria-hidden="true">S</span>
+      Sales Portal
+    </a>
+    <nav aria-label="Main navigation">
+      <a routerLink="/sales" routerLinkActive="active">Sales</a>
+    </nav>
+    <div class="account">
+      <span class="account-copy">
+        <strong>{{ session()?.name }}</strong>
+        <small>{{ session()?.role }}</small>
+      </span>
+      <button type="button" (click)="logout()">Sign out</button>
+    </div>
+  </header>
+  <main>
+    <router-outlet />
+  </main>
+</div>
