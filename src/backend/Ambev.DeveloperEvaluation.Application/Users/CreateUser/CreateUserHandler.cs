@@ -4,6 +4,7 @@ using FluentValidation;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Common.Security;
+using Ambev.DeveloperEvaluation.Domain.Exceptions;
 
 namespace Ambev.DeveloperEvaluation.Application.Users.CreateUser;
 
@@ -21,7 +22,6 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserRe
     /// </summary>
     /// <param name="userRepository">The user repository</param>
     /// <param name="mapper">The AutoMapper instance</param>
-    /// <param name="validator">The validator for CreateUserCommand</param>
     public CreateUserHandler(IUserRepository userRepository, IMapper mapper, IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
@@ -45,7 +45,11 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserRe
 
         var existingUser = await _userRepository.GetByEmailAsync(command.Email, cancellationToken);
         if (existingUser != null)
-            throw new InvalidOperationException($"User with email {command.Email} already exists");
+        {
+            throw new DomainConflictException(
+                DomainErrorCodes.User.EmailAlreadyExists,
+                "A user with this email already exists.");
+        }
 
         var user = _mapper.Map<User>(command);
         user.Password = _passwordHasher.HashPassword(command.Password);
