@@ -1,5 +1,6 @@
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using System.Reflection;
 
 namespace Ambev.DeveloperEvaluation.ORM;
@@ -13,9 +14,16 @@ public class DefaultContext : DbContext
     {
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // Relationship indexes are defined explicitly for the workload. The SaleItem FK is
+        // covered by the unique (SaleId, ProductExternalId) index created by the migration.
+        configurationBuilder.Conventions.Remove(typeof(ForeignKeyIndexConvention));
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
 }

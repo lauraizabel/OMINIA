@@ -44,6 +44,18 @@ public sealed class SalePersistenceTests
             "AND indexdef LIKE 'CREATE UNIQUE INDEX%')"));
         Assert.True(await DatabaseObjectExistsAsync(
             context,
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes " +
+            "WHERE indexname = 'IX_Sales_Public_SaleDate_Id' AND indexdef LIKE '%WHERE%IsDeleted%')"));
+        Assert.True(await DatabaseObjectExistsAsync(
+            context,
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes " +
+            "WHERE indexname = 'IX_Sales_Public_Status_SaleDate_Id' AND indexdef LIKE '%WHERE%IsDeleted%')"));
+        Assert.True(await DatabaseObjectExistsAsync(
+            context,
+            "SELECT NOT EXISTS (SELECT 1 FROM pg_indexes " +
+            "WHERE indexname IN ('IX_SaleItems_SaleId', 'IX_SaleItems_ProductExternalId'))"));
+        Assert.True(await DatabaseObjectExistsAsync(
+            context,
             "SELECT EXISTS (SELECT 1 FROM information_schema.columns " +
             "WHERE table_name = 'SaleItems' AND column_name = 'UnitPrice' " +
             "AND numeric_precision = 18 AND numeric_scale = 2)"));

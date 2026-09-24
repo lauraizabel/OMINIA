@@ -39,13 +39,13 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         ConfigureIdentity(
             builder.OwnsOne(sale => sale.Customer),
             "Customer",
-            "IX_Sales_CustomerExternalId");
+            "IX_Sales_Public_CustomerExternalId");
         builder.Navigation(sale => sale.Customer).IsRequired();
 
         ConfigureIdentity(
             builder.OwnsOne(sale => sale.Branch),
             "Branch",
-            "IX_Sales_BranchExternalId");
+            "IX_Sales_Public_BranchExternalId");
         builder.Navigation(sale => sale.Branch).IsRequired();
 
         builder.Property(sale => sale.TotalAmount)
@@ -70,9 +70,12 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .HasDatabaseName("UX_Sales_SaleNumber");
         builder.HasIndex(sale => new { sale.SaleDate, sale.Id })
             .IsDescending(true, false)
-            .HasDatabaseName("IX_Sales_SaleDate_Id");
-        builder.HasIndex(sale => new { sale.IsDeleted, sale.IsCancelled })
-            .HasDatabaseName("IX_Sales_Deletion_Cancellation");
+            .HasFilter("\"IsDeleted\" = FALSE")
+            .HasDatabaseName("IX_Sales_Public_SaleDate_Id");
+        builder.HasIndex(sale => new { sale.IsCancelled, sale.SaleDate, sale.Id })
+            .IsDescending(false, true, false)
+            .HasFilter("\"IsDeleted\" = FALSE")
+            .HasDatabaseName("IX_Sales_Public_Status_SaleDate_Id");
 
         builder.HasMany(sale => sale.Items)
             .WithOne()
@@ -99,6 +102,7 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsRequired()
             .HasMaxLength(ExternalIdentity.NameMaximumLength);
         identity.HasIndex(value => value.ExternalId)
+            .HasFilter("\"IsDeleted\" = FALSE")
             .HasDatabaseName(indexName);
     }
 }

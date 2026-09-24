@@ -67,12 +67,15 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_Sales_SaleNumber");
 
-                    b.HasIndex("IsDeleted", "IsCancelled")
-                        .HasDatabaseName("IX_Sales_Deletion_Cancellation");
-
                     b.HasIndex("SaleDate", "Id")
                         .IsDescending(true, false)
-                        .HasDatabaseName("IX_Sales_SaleDate_Id");
+                        .HasDatabaseName("IX_Sales_Public_SaleDate_Id")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("IsCancelled", "SaleDate", "Id")
+                        .IsDescending(false, true, false)
+                        .HasDatabaseName("IX_Sales_Public_Status_SaleDate_Id")
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Sales", null, t =>
                         {
@@ -124,9 +127,6 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                         .HasColumnType("numeric(18,2)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("SaleId")
-                        .HasDatabaseName("IX_SaleItems_SaleId");
 
                     b.ToTable("SaleItems", null, t =>
                         {
@@ -212,7 +212,8 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                             b1.HasKey("SaleId");
 
                             b1.HasIndex("ExternalId")
-                                .HasDatabaseName("IX_Sales_BranchExternalId");
+                                .HasDatabaseName("IX_Sales_Public_BranchExternalId")
+                                .HasFilter("\"IsDeleted\" = FALSE");
 
                             b1.ToTable("Sales");
 
@@ -240,7 +241,8 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                             b1.HasKey("SaleId");
 
                             b1.HasIndex("ExternalId")
-                                .HasDatabaseName("IX_Sales_CustomerExternalId");
+                                .HasDatabaseName("IX_Sales_Public_CustomerExternalId")
+                                .HasFilter("\"IsDeleted\" = FALSE");
 
                             b1.ToTable("Sales");
 
@@ -281,9 +283,6 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                                 .HasColumnName("ProductName");
 
                             b1.HasKey("SaleItemId");
-
-                            b1.HasIndex("ExternalId")
-                                .HasDatabaseName("IX_SaleItems_ProductExternalId");
 
                             b1.ToTable("SaleItems");
 

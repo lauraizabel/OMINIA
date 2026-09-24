@@ -49,8 +49,6 @@ public sealed class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
             .HasColumnName("ProductName")
             .IsRequired()
             .HasMaxLength(ExternalIdentity.NameMaximumLength);
-        product.HasIndex(identity => identity.ExternalId)
-            .HasDatabaseName("IX_SaleItems_ProductExternalId");
         builder.Navigation(item => item.Product).IsRequired();
 
         builder.Property(item => item.Quantity).IsRequired();
@@ -72,8 +70,6 @@ public sealed class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
         builder.Property(item => item.IsCancelled).IsRequired();
         builder.Property(item => item.CancelledAt).HasColumnType("timestamp with time zone");
 
-        builder.HasIndex(item => item.SaleId)
-            .HasDatabaseName("IX_SaleItems_SaleId");
         builder.Ignore(item => item.EffectiveAmount);
     }
 }

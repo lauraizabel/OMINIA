@@ -74,41 +74,36 @@ namespace Ambev.DeveloperEvaluation.ORM.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_SaleItems_ProductExternalId",
-                table: "SaleItems",
-                column: "ProductExternalId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SaleItems_SaleId",
-                table: "SaleItems",
-                column: "SaleId");
-
-            migrationBuilder.CreateIndex(
                 name: "UX_SaleItems_SaleId_ProductExternalId",
                 table: "SaleItems",
                 columns: new[] { "SaleId", "ProductExternalId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Sales_BranchExternalId",
+                name: "IX_Sales_Public_BranchExternalId",
                 table: "Sales",
-                column: "BranchExternalId");
+                column: "BranchExternalId",
+                filter: "\"IsDeleted\" = FALSE");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Sales_CustomerExternalId",
+                name: "IX_Sales_Public_CustomerExternalId",
                 table: "Sales",
-                column: "CustomerExternalId");
+                column: "CustomerExternalId",
+                filter: "\"IsDeleted\" = FALSE");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Sales_Deletion_Cancellation",
-                table: "Sales",
-                columns: new[] { "IsDeleted", "IsCancelled" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Sales_SaleDate_Id",
+                name: "IX_Sales_Public_SaleDate_Id",
                 table: "Sales",
                 columns: new[] { "SaleDate", "Id" },
-                descending: new[] { true, false });
+                descending: new[] { true, false },
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Sales_Public_Status_SaleDate_Id",
+                table: "Sales",
+                columns: new[] { "IsCancelled", "SaleDate", "Id" },
+                descending: new[] { false, true, false },
+                filter: "\"IsDeleted\" = FALSE");
 
             migrationBuilder.CreateIndex(
                 name: "UX_Sales_SaleNumber",
