@@ -27,8 +27,6 @@ test('E10 does not retry a create command after the response is interrupted', as
     const interceptedRequest = route.request();
 
     try {
-      // Persist the command independently, then fail only the browser request. This
-      // models a lost response without relying on route.fetch() abort timing.
       const persistedResponse = await request.post(interceptedRequest.url(), {
         data: interceptedRequest.postDataJSON(),
         headers: {

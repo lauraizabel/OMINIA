@@ -45,7 +45,6 @@ export async function fillSale(page: Page, sale: SaleDraft): Promise<void> {
   await item.getByLabel('Quantity').fill(String(sale.quantity));
   await item.getByLabel('Unit price').fill(String(sale.unitPrice));
 
-  // Confirm that the reactive form observed the initial field before submission.
   await expect(page.getByLabel('Sale number')).toHaveValue(sale.saleNumber);
 }
 
