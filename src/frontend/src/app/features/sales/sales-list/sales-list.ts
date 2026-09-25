@@ -1,17 +1,19 @@
-import { CurrencyPipe, DatePipe } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { FormControl, FormGroup } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { catchError, distinctUntilChanged, map, of, startWith, Subject, switchMap } from 'rxjs';
+import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 import { SalesApiService } from '../data-access/sales-api.service';
 import { PagedSales, SaleListQuery } from '../data-access/sales.models';
 import { mapSaleError } from '../shared/sale-errors';
+import { SalesFilters, SalesFiltersForm } from './components/sales-filters/sales-filters';
+import { SalesPageHeader } from './components/sales-page-header/sales-page-header';
+import { SalesTable } from './components/sales-table/sales-table';
 
 @Component({
   selector: 'app-sales-list',
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [ButtonDirective, RouterLink, SalesFilters, SalesPageHeader, SalesTable],
   templateUrl: './sales-list.html',
   styleUrl: './sales-list.scss',
 })
@@ -30,7 +32,7 @@ export class SalesList {
     return this.router.url;
   }
 
-  readonly filters = new FormGroup({
+  readonly filters: SalesFiltersForm = new FormGroup({
     saleNumber: new FormControl('', { nonNullable: true }),
     customerExternalId: new FormControl('', { nonNullable: true }),
     branchExternalId: new FormControl('', { nonNullable: true }),
@@ -123,6 +125,25 @@ export class SalesList {
     if (this.query().page < totalPages) void this.goToPage(this.query().page + 1);
   }
 
+  changePageSize(size: number): void {
+    this.filters.controls.size.setValue(size);
+    this.applyFilters();
+  }
+
+  hasActiveFilters(): boolean {
+    const query = this.query();
+    return Boolean(
+      query.saleNumber ||
+      query.customerExternalId ||
+      query.branchExternalId ||
+      query.isCancelled !== undefined ||
+      query.minSaleDate ||
+      query.maxSaleDate ||
+      query.minTotalAmount ||
+      query.maxTotalAmount,
+    );
+  }
+
   private goToPage(page: number): Promise<boolean> {
     return this.router.navigate([], {
       relativeTo: this.route,
@@ -138,8 +159,8 @@ export class SalesList {
         customerExternalId: query.customerExternalId ?? '',
         branchExternalId: query.branchExternalId ?? '',
         status: query.isCancelled === undefined ? '' : query.isCancelled ? 'cancelled' : 'active',
-        minSaleDate: query.minSaleDate?.slice(0, 10) ?? '',
-        maxSaleDate: query.maxSaleDate?.slice(0, 10) ?? '',
+        minSaleDate: toLocalDateInput(query.minSaleDate),
+        maxSaleDate: toLocalDateInput(query.maxSaleDate),
         minTotalAmount: query.minTotalAmount ?? '',
         maxTotalAmount: query.maxTotalAmount ?? '',
         order: query.order,
@@ -192,4 +213,12 @@ function dateStart(value: string): string | null {
 
 function dateEnd(value: string): string | null {
   return value ? new Date(`${value}T23:59:59.999`).toISOString() : null;
+}
+
+export function toLocalDateInput(value: string | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
 }

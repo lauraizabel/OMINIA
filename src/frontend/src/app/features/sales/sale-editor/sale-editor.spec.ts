@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { SalesApiService } from '../data-access/sales-api.service';
 import {
@@ -104,7 +104,9 @@ describe('SaleEditor create mode', () => {
 describe('SaleEditor edit mode', () => {
   it('preserves the draft after a stale ETag response', async () => {
     const resource = saleResource();
-    const update = vi.fn((_id: string, _request: UpdateSaleRequest, _etag: string) =>
+    const update = vi.fn<
+      (id: string, request: UpdateSaleRequest, etag: string) => Observable<SaleResource>
+    >(() =>
       throwError(
         () =>
           new HttpErrorResponse({

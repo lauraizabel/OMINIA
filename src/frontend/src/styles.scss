@@ -1,15 +1,79 @@
+@import '@angular/cdk/overlay-prebuilt.css';
+
 :root {
-  --accent: #51e2c1;
-  --accent-strong: #75efd3;
-  --primary: #0c5f80;
-  --primary-hover: #084965;
-  --ink: #102535;
-  --muted: #607484;
-  --border: #cbd7de;
-  --surface: #f4f7f8;
-  --display-font: 'Aptos Display', 'Segoe UI', sans-serif;
+  --color-background: #f6f8fa;
+  --color-surface: #fff;
+  --color-surface-subtle: #f9fafb;
+  --color-surface-hover: #f2f5f7;
+  --color-border: #e4e7ec;
+  --color-border-strong: #cfd6dd;
+  --color-text-primary: #182230;
+  --color-text-secondary: #667085;
+  --color-text-muted: #98a2b3;
+  --color-primary: #086b7d;
+  --color-primary-hover: #075665;
+  --color-primary-active: #064955;
+  --color-primary-subtle: #eaf5f6;
+  --color-accent: #36b7a5;
+  --color-accent-strong: #229987;
+  --color-success-text: #17644f;
+  --color-success-subtle: #e8f7f1;
+  --color-success-border: #aadfce;
+  --color-warning-text: #7a4d0b;
+  --color-warning-subtle: #fff7e6;
+  --color-warning-border: #f2d28d;
+  --color-danger: #b4233c;
+  --color-danger-hover: #941c32;
+  --color-danger-text: #8a2638;
+  --color-danger-subtle: #fff0f2;
+  --color-danger-border: #efb8c1;
+  --color-info-text: #17566b;
+  --color-info-subtle: #edf7fa;
+  --color-info-border: #b9dce5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --font-sans: 'Aptos', 'Segoe UI', sans-serif;
+  --font-display: 'Aptos Display', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-size-xs: 0.72rem;
+  --font-size-sm: 0.8rem;
+  --font-size-md: 0.9rem;
+  --font-size-lg: 1rem;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(23, 33, 43, 0.08);
+  --shadow-md: 0 8px 24px rgba(23, 33, 43, 0.1);
+  --shadow-lg: 0 16px 40px rgba(23, 33, 43, 0.14);
+  --focus-ring: 0 0 0 3px rgba(8, 107, 125, 0.22);
+  --control-height-sm: 2rem;
+  --control-height-md: 2.625rem;
+  --content-width: 80rem;
+  --motion-fast: 140ms ease;
+
+  /* Compatibility aliases while feature styles migrate to semantic tokens. */
+  --accent: var(--color-accent);
+  --accent-strong: var(--color-accent-strong);
+  --primary: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --ink: var(--color-text-primary);
+  --muted: var(--color-text-secondary);
+  --border: var(--color-border);
+  --surface: var(--color-background);
+  --display-font: var(--font-display);
   color-scheme: light;
-  font-family: 'Aptos', 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-synthesis: none;
 }
 
@@ -23,6 +87,9 @@ html {
 body {
   min-height: 100dvh;
   margin: 0;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+  line-height: 1.5;
 }
 button,
 input,
@@ -31,6 +98,131 @@ textarea {
   font: inherit;
 }
 :focus-visible {
-  outline: 3px solid rgba(12, 95, 128, 0.35);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.ui-button {
+  display: inline-flex;
+  min-height: var(--control-height-md);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast),
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    transform var(--motion-fast);
+}
+.ui-button--small {
+  min-height: var(--control-height-sm);
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-xs);
+}
+.ui-button--primary {
+  color: #fff;
+  background: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+.ui-button--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+.ui-button--primary:active:not(:disabled) {
+  background: var(--color-primary-active);
+  transform: translateY(1px);
+}
+.ui-button--secondary {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+.ui-button--secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+.ui-button--ghost {
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+.ui-button--ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+.ui-button--danger {
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+  background: var(--color-surface);
+}
+.ui-button--danger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  color: var(--color-danger-hover);
+  background: var(--color-danger-subtle);
+}
+.ui-button--link {
+  min-height: auto;
+  padding: 0;
+  color: var(--color-primary);
+  background: transparent;
+}
+.ui-button--link:hover:not(:disabled) {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+.ui-button:disabled,
+.ui-button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-button--loading {
+  cursor: wait;
+}
+.ui-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: ui-spin 700ms linear infinite;
+}
+.ui-money {
+  font-variant-numeric: tabular-nums;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  clip-path: inset(50%) !important;
+}
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media (max-width: 600px) {
+  .ui-button,
+  .ui-button--small,
+  .ui-button--link {
+    min-height: 2.75rem;
+  }
 }

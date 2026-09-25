@@ -1,0 +1,63 @@
+<section class="table-surface" aria-label="Sales results">
+  <div class="table-scroll">
+    <table>
+      <caption class="sr-only">
+        Sales matching the current filters
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Sale</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Branch</th>
+          <th scope="col">Date</th>
+          <th scope="col" class="align-right">Total</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (sale of result().data; track sale.id) {
+          <tr>
+            <td data-label="Sale">
+              <span class="primary-cell">{{ sale.saleNumber }}</span
+              ><span class="secondary-cell mono">{{ sale.id }}</span>
+            </td>
+            <td data-label="Customer">
+              <span class="primary-cell">{{ sale.customer.name }}</span
+              ><span class="secondary-cell">{{ sale.customer.externalId }}</span>
+            </td>
+            <td data-label="Branch">
+              <span class="primary-cell">{{ sale.branch.name }}</span
+              ><span class="secondary-cell">{{ sale.branch.externalId }}</span>
+            </td>
+            <td data-label="Date">
+              <span class="date-cell">{{ sale.saleDate | date: 'MMM d, y' }}</span
+              ><span class="secondary-cell">{{ sale.saleDate | date: 'shortTime' }}</span>
+            </td>
+            <td data-label="Total" class="money align-right">
+              {{ sale.totalAmount | money }}
+            </td>
+            <td data-label="Status"><app-status-badge [cancelled]="sale.isCancelled" /></td>
+            <td data-label="Actions" class="actions">
+              <a
+                [routerLink]="['/sales', sale.id]"
+                [queryParams]="{ returnUrl: returnUrl() }"
+                [attr.aria-label]="'View sale ' + sale.saleNumber"
+                >View <app-icon name="arrow-right"
+              /></a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <app-sales-pagination
+    [totalItems]="result().totalItems"
+    [currentPage]="result().currentPage"
+    [totalPages]="result().totalPages"
+    [pageSize]="pageSize()"
+    (previous)="previousPage.emit()"
+    (next)="nextPage.emit()"
+    (pageSizeChange)="pageSizeChange.emit($event)"
+  />
+</section>

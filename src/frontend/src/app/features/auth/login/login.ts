@@ -6,10 +6,13 @@ import { finalize } from 'rxjs';
 import { ApiProblem } from '../../../core/api/api.models';
 import { AuthService } from '../../../core/auth/auth.service';
 import { safeReturnUrl } from '../../../core/auth/return-url';
+import { Alert } from '../../../shared/ui/alert/alert';
+import { ButtonDirective } from '../../../shared/ui/button/button.directive';
+import { Icon } from '../../../shared/ui/icon/icon';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule],
+  imports: [Alert, ButtonDirective, Icon, ReactiveFormsModule],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })

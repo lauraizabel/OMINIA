@@ -1,16 +1,17 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 
 @Component({
   selector: 'app-forbidden',
-  imports: [RouterLink],
+  imports: [ButtonDirective, RouterLink],
   template: `
     <main class="status-page">
       <div class="status-card">
         <span class="status-code">403</span>
         <h1>You do not have access to this area.</h1>
         <p>Your account is signed in, but its role does not allow this operation.</p>
-        <a routerLink="/sales">Return to sales</a>
+        <a appButton routerLink="/sales">Return to sales</a>
       </div>
     </main>
   `,
@@ -46,15 +47,6 @@ import { RouterLink } from '@angular/router';
       margin: 0 auto 2rem;
       color: var(--muted);
       line-height: 1.6;
-    }
-    a {
-      display: inline-flex;
-      padding: 0.85rem 1.2rem;
-      border-radius: 0.65rem;
-      color: #fff;
-      background: var(--primary);
-      font-weight: 800;
-      text-decoration: none;
     }
   `,
 })

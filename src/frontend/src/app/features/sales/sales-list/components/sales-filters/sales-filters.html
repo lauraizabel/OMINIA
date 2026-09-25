@@ -1,0 +1,156 @@
+<form [formGroup]="form()" (ngSubmit)="apply()">
+  <div class="toolbar">
+    <label class="search">
+      <span class="sr-only">Search by sale number</span>
+      <span class="search-icon" aria-hidden="true"></span>
+      <input formControlName="saleNumber" placeholder="Search by sale number…" autocomplete="off" />
+    </label>
+
+    <label class="compact-field">
+      <span class="sr-only">Status</span>
+      <select formControlName="status" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </label>
+
+    <div class="filter-menu" [class.open]="isMenuOpen('date')">
+      <button
+        cdkOverlayOrigin
+        #dateOrigin="cdkOverlayOrigin"
+        type="button"
+        class="menu-trigger"
+        [class.active]="form().controls.minSaleDate.value || form().controls.maxSaleDate.value"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="isMenuOpen('date')"
+        aria-controls="date-filter-popover"
+        (click)="toggleMenu('date')"
+      >
+        <span class="calendar" aria-hidden="true"></span>{{ dateLabel()
+        }}<span class="chevron" aria-hidden="true"></span>
+      </button>
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="dateOrigin"
+        [cdkConnectedOverlayOpen]="isMenuOpen('date')"
+        [cdkConnectedOverlayPositions]="overlayPositions"
+        [cdkConnectedOverlayPush]="true"
+        [cdkConnectedOverlayViewportMargin]="16"
+        (overlayOutsideClick)="closeMenus()"
+        (overlayKeydown)="handleOverlayKeydown($event)"
+      >
+        <div class="popover date-popover" id="date-filter-popover" role="dialog">
+          <div class="popover-heading">
+            <strong>Date range</strong>
+            <button type="button" (click)="closeMenus()" aria-label="Close date filters">
+              <app-icon name="close" />
+            </button>
+          </div>
+          <label>From<input type="date" formControlName="minSaleDate" /></label>
+          <label>To<input type="date" formControlName="maxSaleDate" /></label>
+        </div>
+      </ng-template>
+    </div>
+
+    <div class="filter-menu" [class.open]="isMenuOpen('more')">
+      <button
+        cdkOverlayOrigin
+        #moreOrigin="cdkOverlayOrigin"
+        type="button"
+        class="menu-trigger"
+        [class.active]="moreFilterCount() > 0"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="isMenuOpen('more')"
+        aria-controls="more-filter-popover"
+        (click)="toggleMenu('more')"
+      >
+        More filters
+        @if (moreFilterCount() > 0) {
+          <span class="count">{{ moreFilterCount() }}</span>
+        }
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="moreOrigin"
+        [cdkConnectedOverlayOpen]="isMenuOpen('more')"
+        [cdkConnectedOverlayPositions]="overlayPositions"
+        [cdkConnectedOverlayPush]="true"
+        [cdkConnectedOverlayViewportMargin]="16"
+        (overlayOutsideClick)="closeMenus()"
+        (overlayKeydown)="handleOverlayKeydown($event)"
+      >
+        <div class="popover more-popover" id="more-filter-popover" role="dialog">
+          <div class="popover-heading">
+            <strong>More filters</strong>
+            <button type="button" (click)="closeMenus()" aria-label="Close more filters">
+              <app-icon name="close" />
+            </button>
+          </div>
+          <div class="field-grid">
+            <label
+              >Customer ID<input formControlName="customerExternalId" placeholder="CUSTOMER-001"
+            /></label>
+            <label
+              >Branch ID<input formControlName="branchExternalId" placeholder="BRANCH-FOR"
+            /></label>
+            <label
+              >Minimum total<input
+                type="number"
+                min="0"
+                step="0.01"
+                formControlName="minTotalAmount"
+                placeholder="0.00"
+            /></label>
+            <label
+              >Maximum total<input
+                type="number"
+                min="0"
+                step="0.01"
+                formControlName="maxTotalAmount"
+                placeholder="0.00"
+            /></label>
+            <label class="order-field"
+              >Order by
+              <select formControlName="order">
+                <option value="saleDate desc">Newest first</option>
+                <option value="saleDate asc">Oldest first</option>
+                <option value="saleNumber asc">Sale number A–Z</option>
+                <option value="saleNumber desc">Sale number Z–A</option>
+                <option value="totalAmount desc">Highest total</option>
+                <option value="totalAmount asc">Lowest total</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </ng-template>
+    </div>
+
+    <button
+      appButton="ghost"
+      type="button"
+      (click)="filtersCleared.emit()"
+      [disabled]="activeFilterCount() === 0"
+    >
+      Clear
+    </button>
+    <button appButton="secondary" type="submit">Apply</button>
+  </div>
+  @if (filterChips().length) {
+    <div class="active-filters" aria-label="Active filters">
+      @for (chip of filterChips(); track chip.label) {
+        <button
+          type="button"
+          (click)="clearFilter(chip.controls)"
+          [attr.aria-label]="'Remove ' + chip.label + ' filter'"
+        >
+          {{ chip.label }} <app-icon name="close" />
+        </button>
+      }
+      @if (filterChips().length > 1) {
+        <button class="clear-all" type="button" (click)="filtersCleared.emit()">Clear all</button>
+      }
+    </div>
+  }
+</form>

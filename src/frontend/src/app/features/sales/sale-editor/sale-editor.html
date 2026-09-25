@@ -1,173 +1,164 @@
-<button class="back" type="button" (click)="cancel()">← Cancel and go back</button>
+<button appButton="link" class="back" type="button" (click)="cancel()">
+  <app-icon name="arrow-left" /> Back to sales
+</button>
 
 @if (loading()) {
-  <section class="state">
-    <span class="spinner"></span>
-    <h1>Loading sale…</h1>
+  <section class="editor-skeleton" aria-label="Loading sale" aria-busy="true">
+    <span class="sr-only">Loading sale…</span>
+    <div class="skeleton skeleton-title"></div>
+    <div class="skeleton skeleton-copy"></div>
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
   </section>
 } @else if (loadError()) {
   <section class="state" role="alert">
+    <span class="state-icon" aria-hidden="true">!</span>
     <h1>Sale could not be loaded</h1>
     <p>{{ loadError() }}</p>
-    <button type="button" (click)="reloadCurrent()">Try again</button>
+    <button appButton="secondary" type="button" (click)="reloadCurrent()">Try again</button>
   </section>
 } @else {
-  <header class="page-heading">
-    <p>{{ isEdit ? 'Update record' : 'New record' }}</p>
-    <h1>{{ isEdit ? saleNumber() : 'Create sale' }}</h1>
-    <span>{{
+  <app-page-header
+    [eyebrow]="isEdit ? 'Edit sale' : 'New sale'"
+    [title]="isEdit ? saleNumber() : 'Create sale'"
+    [description]="
       isEdit
-        ? 'Only active items are included in the update.'
-        : 'Calculated values are confirmed by the API after saving.'
-    }}</span>
-  </header>
+        ? 'Update the commercial information and active products for this sale.'
+        : 'Add the sale information and products below.'
+    "
+  />
 
   @if (submitError()) {
-    <div class="alert" role="alert" tabindex="-1">
-      <span>{{ submitError() }}</span>
+    <app-alert [tone]="conflict() ? 'warning' : 'danger'" title="We couldn't save this sale">
+      {{ submitError() }}
       @if (conflict()) {
-        <button type="button" (click)="reloadCurrent()">Reload server version</button>
+        <button alertAction appButton="link" type="button" (click)="reloadCurrent()">
+          Reload server version
+        </button>
       }
-    </div>
+    </app-alert>
   }
 
   <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <section class="card fields">
-      <label
-        >Sale number<input formControlName="saleNumber" autocomplete="off" /><small
-          class="field-error"
-          >{{ errorFor(form.controls.saleNumber, 'saleNumber') }}</small
-        ></label
-      >
-      <label
-        >Sale date<input type="datetime-local" formControlName="saleDate" /><small
-          class="field-error"
-          >{{ errorFor(form.controls.saleDate, 'saleDate') }}</small
-        ></label
-      >
-      <fieldset>
-        <legend>Customer snapshot</legend>
-        <label
-          >External ID<input formControlName="customerExternalId" /><small class="field-error">{{
-            errorFor(form.controls.customerExternalId, 'customer.externalId')
-          }}</small></label
-        ><label
-          >Name<input formControlName="customerName" /><small class="field-error">{{
-            errorFor(form.controls.customerName, 'customer.name')
-          }}</small></label
-        >
-      </fieldset>
-      <fieldset>
-        <legend>Branch snapshot</legend>
-        <label
-          >External ID<input formControlName="branchExternalId" /><small class="field-error">{{
-            errorFor(form.controls.branchExternalId, 'branch.externalId')
-          }}</small></label
-        ><label
-          >Name<input formControlName="branchName" /><small class="field-error">{{
-            errorFor(form.controls.branchName, 'branch.name')
-          }}</small></label
-        >
-      </fieldset>
-    </section>
-
-    <section class="card item-section">
-      <div class="section-heading">
-        <div>
-          <p>Active items</p>
-          <h2>Products and quantities</h2>
+    <section class="card details-card" aria-labelledby="sale-details-title">
+      <div class="form-section">
+        <div class="section-copy">
+          <h2 id="sale-details-title">Sale details</h2>
+          <p>Core information used to identify and date this transaction.</p>
         </div>
-        <button type="button" (click)="addItem()" [disabled]="items.length >= 100">
-          + Add item
-        </button>
+        <div class="field-grid">
+          <label>
+            <span>Sale number <em aria-hidden="true">*</em></span>
+            <input
+              formControlName="saleNumber"
+              autocomplete="off"
+              [attr.aria-invalid]="
+                form.controls.saleNumber.invalid && form.controls.saleNumber.touched
+              "
+              aria-describedby="sale-number-error"
+            />
+            <small id="sale-number-error" class="field-error">{{
+              errorFor(form.controls.saleNumber, 'saleNumber')
+            }}</small>
+          </label>
+          <label>
+            <span>Sale date <em aria-hidden="true">*</em></span>
+            <input
+              type="datetime-local"
+              formControlName="saleDate"
+              [attr.aria-invalid]="form.controls.saleDate.invalid && form.controls.saleDate.touched"
+              aria-describedby="sale-date-error"
+            />
+            <small id="sale-date-error" class="field-error">{{
+              errorFor(form.controls.saleDate, 'saleDate')
+            }}</small>
+          </label>
+        </div>
       </div>
-      <div formArrayName="items" class="item-list">
-        @for (item of items.controls; track item; let index = $index) {
-          <article class="item-form" [formGroupName]="index">
-            <div class="item-number">{{ index + 1 }}</div>
-            <div class="item-fields">
-              <label
-                >Product external ID<input formControlName="productExternalId" /><small
-                  class="field-error"
-                  >{{
-                    errorFor(
-                      item.controls.productExternalId,
-                      'items[' + index + '].product.externalId'
-                    )
-                  }}</small
-                ></label
-              >
-              <label
-                >Product name<input formControlName="productName" /><small class="field-error">{{
-                  errorFor(item.controls.productName, 'items[' + index + '].product.name')
-                }}</small></label
-              >
-              <label
-                >Quantity<input
-                  type="number"
-                  min="1"
-                  max="20"
-                  step="1"
-                  formControlName="quantity"
-                /><small class="field-error">{{
-                  errorFor(item.controls.quantity, 'items[' + index + '].quantity')
-                }}</small></label
-              >
-              <label
-                >Unit price<input
-                  type="number"
-                  min="0.01"
-                  max="1000000"
-                  step="0.01"
-                  formControlName="unitPrice"
-                /><small class="field-error">{{
-                  errorFor(item.controls.unitPrice, 'items[' + index + '].unitPrice')
-                }}</small></label
-              >
-            </div>
-            <dl class="preview">
-              <div>
-                <dt>Gross</dt>
-                <dd>{{ preview(index).grossAmount | currency: 'BRL' }}</dd>
-              </div>
-              <div>
-                <dt>Discount</dt>
-                <dd>
-                  {{ preview(index).discountRate | percent }} ·
-                  {{ preview(index).discountAmount | currency: 'BRL' }}
-                </dd>
-              </div>
-              <div>
-                <dt>Preview total</dt>
-                <dd>{{ preview(index).totalAmount | currency: 'BRL' }}</dd>
-              </div>
-            </dl>
-            <button
-              class="remove"
-              type="button"
-              (click)="removeItem(index)"
-              [disabled]="items.length <= 1"
-              [attr.aria-label]="'Remove item ' + (index + 1)"
-            >
-              Remove
-            </button>
-          </article>
-        }
-      </div>
-      @if (items.hasError('duplicateProduct') && items.touched) {
-        <p class="array-error" role="alert">Each product external ID must be unique.</p>
-      }
-      <footer>
-        <span>Preview total</span><strong>{{ previewTotal() | currency: 'BRL' }}</strong>
-      </footer>
+
+      <section class="form-section" aria-labelledby="customer-title">
+        <div class="section-copy">
+          <h2 id="customer-title">Customer</h2>
+          <p>Customer information stored with this sale.</p>
+        </div>
+        <div class="field-grid identity-grid">
+          <label>
+            <span>External ID <em aria-hidden="true">*</em></span>
+            <input
+              formControlName="customerExternalId"
+              [attr.aria-invalid]="
+                form.controls.customerExternalId.invalid && form.controls.customerExternalId.touched
+              "
+              aria-describedby="customer-id-error"
+            />
+            <small id="customer-id-error" class="field-error">{{
+              errorFor(form.controls.customerExternalId, 'customer.externalId')
+            }}</small>
+          </label>
+          <label>
+            <span>Name <em aria-hidden="true">*</em></span>
+            <input
+              formControlName="customerName"
+              [attr.aria-invalid]="
+                form.controls.customerName.invalid && form.controls.customerName.touched
+              "
+              aria-describedby="customer-name-error"
+            />
+            <small id="customer-name-error" class="field-error">{{
+              errorFor(form.controls.customerName, 'customer.name')
+            }}</small>
+          </label>
+        </div>
+      </section>
+
+      <section class="form-section" aria-labelledby="branch-title">
+        <div class="section-copy">
+          <h2 id="branch-title">Branch</h2>
+          <p>Branch information stored with this sale.</p>
+        </div>
+        <div class="field-grid identity-grid">
+          <label>
+            <span>External ID <em aria-hidden="true">*</em></span>
+            <input
+              formControlName="branchExternalId"
+              [attr.aria-invalid]="
+                form.controls.branchExternalId.invalid && form.controls.branchExternalId.touched
+              "
+              aria-describedby="branch-id-error"
+            />
+            <small id="branch-id-error" class="field-error">{{
+              errorFor(form.controls.branchExternalId, 'branch.externalId')
+            }}</small>
+          </label>
+          <label>
+            <span>Name <em aria-hidden="true">*</em></span>
+            <input
+              formControlName="branchName"
+              [attr.aria-invalid]="
+                form.controls.branchName.invalid && form.controls.branchName.touched
+              "
+              aria-describedby="branch-name-error"
+            />
+            <small id="branch-name-error" class="field-error">{{
+              errorFor(form.controls.branchName, 'branch.name')
+            }}</small>
+          </label>
+        </div>
+      </section>
     </section>
 
+    <app-sale-items-editor
+      [items]="items"
+      [errorFor]="fieldError"
+      (itemAdded)="addItem()"
+      (itemRemoved)="removeItem($event)"
+    />
     @if (cancelledItems().length) {
       <section class="card cancelled-history">
         <div class="section-heading">
           <div>
-            <p>History</p>
             <h2>Cancelled items</h2>
+            <p>Items retained for the sale history.</p>
           </div>
         </div>
         @for (item of cancelledItems(); track item.id) {
@@ -176,18 +167,25 @@
               <strong>{{ item.product.name }}</strong
               ><small>{{ item.product.externalId }}</small>
             </div>
-            <span>{{ item.quantity }} × {{ item.unitPrice | currency: 'BRL' }}</span
-            ><span>Cancelled {{ item.cancelledAt | date: 'short' }}</span>
+            <span>{{ item.quantity }} × {{ item.unitPrice | money }}</span>
+            <span>Cancelled {{ item.cancelledAt | date: 'short' }}</span>
           </article>
         }
       </section>
     }
 
     <div class="form-actions">
-      <button class="cancel" type="button" (click)="cancel()">Cancel</button
-      ><button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Saving…' : isEdit ? 'Save changes' : 'Create sale' }}
-      </button>
+      <span>{{ form.dirty ? 'Unsaved changes' : 'No pending changes' }}</span>
+      <div class="form-actions__buttons">
+        <button appButton="ghost" type="button" (click)="cancel()">Cancel</button>
+        <button appButton type="submit" [loading]="saving()" [disabled]="saving()">
+          @if (saving()) {
+            <span class="ui-spinner" aria-hidden="true"></span> Saving…
+          } @else {
+            {{ isEdit ? 'Save changes' : 'Create sale' }}
+          }
+        </button>
+      </div>
     </div>
   </form>
 }

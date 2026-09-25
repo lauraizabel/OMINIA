@@ -25,7 +25,7 @@
       <p class="supporting-copy">Use your company account to access sales operations.</p>
 
       @if (errorMessage()) {
-        <div class="alert" role="alert">{{ errorMessage() }}</div>
+        <app-alert>{{ errorMessage() }}</app-alert>
       }
 
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
@@ -73,13 +73,19 @@
           }
         </div>
 
-        <button class="submit-button" type="submit" [disabled]="submitting()">
+        <button
+          appButton
+          class="submit-button"
+          type="submit"
+          [loading]="submitting()"
+          [disabled]="submitting()"
+        >
           @if (submitting()) {
-            <span class="spinner" aria-hidden="true"></span>
+            <span class="ui-spinner" aria-hidden="true"></span>
             Signing in…
           } @else {
             Sign in
-            <span aria-hidden="true">→</span>
+            <app-icon name="arrow-right" />
           }
         </button>
       </form>

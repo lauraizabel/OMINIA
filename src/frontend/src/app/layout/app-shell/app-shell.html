@@ -7,15 +7,12 @@
     <nav aria-label="Main navigation">
       <a routerLink="/sales" routerLinkActive="active">Sales</a>
     </nav>
-    <div class="account">
-      <span class="account-copy">
-        <strong>{{ session()?.name }}</strong>
-        <small>{{ session()?.role }}</small>
-      </span>
-      <button type="button" (click)="logout()">Sign out</button>
-    </div>
+    @if (session(); as user) {
+      <app-user-menu [name]="user.name" [role]="user.role" (signOut)="logout()" />
+    }
   </header>
   <main>
     <router-outlet />
   </main>
+  <app-toast-viewport />
 </div>
