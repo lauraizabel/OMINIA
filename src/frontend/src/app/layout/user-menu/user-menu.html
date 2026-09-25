@@ -1,0 +1,40 @@
+<div class="user-menu" [class.open]="open()">
+  <button
+    cdkOverlayOrigin
+    #userMenuOrigin="cdkOverlayOrigin"
+    type="button"
+    class="menu-trigger"
+    aria-label="Open user menu"
+    aria-haspopup="menu"
+    [attr.aria-expanded]="open()"
+    aria-controls="user-menu-popover"
+    (click)="toggle()"
+  >
+    <span class="avatar" aria-hidden="true">{{ initials() }}</span>
+    <span class="identity"
+      ><strong>{{ name() }}</strong
+      ><small>{{ role() }}</small></span
+    >
+    <span class="chevron" aria-hidden="true"></span>
+  </button>
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="userMenuOrigin"
+    [cdkConnectedOverlayOpen]="open()"
+    [cdkConnectedOverlayPositions]="overlayPositions"
+    [cdkConnectedOverlayPush]="true"
+    [cdkConnectedOverlayViewportMargin]="16"
+    (overlayOutsideClick)="close()"
+    (overlayKeydown)="handleOverlayKeydown($event)"
+  >
+    <div class="menu" id="user-menu-popover" role="menu">
+      <div class="menu-identity">
+        <strong>{{ name() }}</strong
+        ><span>{{ role() }}</span>
+      </div>
+      <button type="button" role="menuitem" (click)="logout()">
+        <app-icon name="logout" /> Sign out
+      </button>
+    </div>
+  </ng-template>
+</div>

@@ -1,4 +1,4 @@
-import { CurrencyPipe, DatePipe, PercentPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { Component, ElementRef, inject, signal } from '@angular/core';
 import {
   AbstractControl,
@@ -12,30 +12,37 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { safeReturnUrl } from '../../../core/auth/return-url';
+import { Alert } from '../../../shared/ui/alert/alert';
+import { ButtonDirective } from '../../../shared/ui/button/button.directive';
+import { Icon } from '../../../shared/ui/icon/icon';
+import { MoneyPipe } from '../../../shared/ui/money.pipe';
+import { PageHeader } from '../../../shared/ui/page-header/page-header';
+import { ToastService } from '../../../shared/ui/toast/toast.service';
 import { SalesApiService } from '../data-access/sales-api.service';
 import {
   CreateSaleRequest,
-  Sale,
   SaleItem,
   SaleItemInput,
   SaleResource,
   UpdateSaleRequest,
 } from '../data-access/sales.models';
 import { mapSaleError } from '../shared/sale-errors';
-import { previewLine } from '../shared/sale-money';
 import { PendingChangesAware } from '../shared/pending-changes.guard';
-
-type ItemForm = FormGroup<{
-  id: FormControl<string>;
-  productExternalId: FormControl<string>;
-  productName: FormControl<string>;
-  quantity: FormControl<number>;
-  unitPrice: FormControl<number>;
-}>;
+import { ItemForm } from './sale-form.types';
+import { SaleItemsEditor } from './sale-items-editor/sale-items-editor';
 
 @Component({
   selector: 'app-sale-editor',
-  imports: [CurrencyPipe, DatePipe, PercentPipe, ReactiveFormsModule],
+  imports: [
+    Alert,
+    ButtonDirective,
+    DatePipe,
+    Icon,
+    MoneyPipe,
+    PageHeader,
+    ReactiveFormsModule,
+    SaleItemsEditor,
+  ],
   templateUrl: './sale-editor.html',
   styleUrl: './sale-editor.scss',
 })
@@ -44,6 +51,7 @@ export class SaleEditor implements PendingChangesAware {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly toast = inject(ToastService);
 
   readonly saleId = this.route.snapshot.paramMap.get('id');
   readonly isEdit = this.saleId !== null;
@@ -111,17 +119,8 @@ export class SaleEditor implements PendingChangesAware {
     this.form.markAsDirty();
   }
 
-  preview(index: number) {
-    const item = this.items.at(index).getRawValue();
-    return previewLine(Number(item.quantity), Number(item.unitPrice));
-  }
-
-  previewTotal(): number {
-    return this.items.controls.reduce(
-      (total, _, index) => total + this.preview(index).totalAmount,
-      0,
-    );
-  }
+  readonly fieldError = (control: AbstractControl, field: string): string =>
+    this.errorFor(control, field);
 
   errorFor(control: AbstractControl, field: string): string {
     const serverError = this.serverFields()[field] ?? this.serverFields()[capitalize(field)];
@@ -181,6 +180,9 @@ export class SaleEditor implements PendingChangesAware {
     request.pipe(finalize(() => this.saving.set(false))).subscribe({
       next: (resource) => {
         this.saved = true;
+        this.toast.success(
+          this.isEdit ? 'Sale updated successfully.' : 'Sale created successfully.',
+        );
         void this.router.navigate(['/sales', resource.sale.id], {
           queryParams: { returnUrl: this.returnUrl },
         });
@@ -291,7 +293,11 @@ function identityNameControl(value = ''): FormControl<string> {
 }
 
 function noControlCharacters(control: AbstractControl<string>): ValidationErrors | null {
-  return /[\u0000-\u001F\u007F]/.test(control.value) ? { controlCharacters: true } : null;
+  const hasControlCharacter = [...control.value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+  return hasControlCharacter ? { controlCharacters: true } : null;
 }
 
 function notBlank(control: AbstractControl<string>): ValidationErrors | null {

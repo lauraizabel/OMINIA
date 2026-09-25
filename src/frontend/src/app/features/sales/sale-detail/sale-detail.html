@@ -1,40 +1,52 @@
-<button class="back" type="button" (click)="back()">← Back to sales</button>
+<button appButton="link" class="back" type="button" (click)="back()">
+  <app-icon name="arrow-left" /> Back to sales
+</button>
 
 @if (loading()) {
-  <section class="state" aria-live="polite">
-    <span class="spinner"></span>
-    <h1>Loading sale…</h1>
+  <section class="detail-skeleton" aria-label="Loading sale" aria-busy="true">
+    <span class="sr-only">Loading sale…</span>
+    <div class="skeleton skeleton-title"></div>
+    <div class="skeleton skeleton-summary"></div>
+    <div class="skeleton skeleton-table"></div>
   </section>
 } @else if (error()) {
   <section class="state" role="alert">
+    <span class="state-icon" aria-hidden="true">!</span>
     <h1>Sale could not be loaded</h1>
     <p>{{ error() }}</p>
-    <button type="button" (click)="retry()">Try again</button>
+    <button appButton="secondary" type="button" (click)="retry()">Try again</button>
   </section>
 } @else if (resource(); as data) {
-  <header class="page-heading">
-    <div>
-      <p>Sale record</p>
-      <h1>{{ data.sale.saleNumber }}</h1>
-      <span>Updated {{ data.sale.updatedAt | date: 'medium' }}</span>
-    </div>
-    <span class="badge" [class.cancelled]="data.sale.isCancelled">{{
-      data.sale.isCancelled ? 'Cancelled' : 'Active'
-    }}</span>
-  </header>
+  <app-page-header
+    eyebrow="Sale record"
+    [title]="data.sale.saleNumber"
+    [description]="'Updated ' + (data.sale.updatedAt | date: 'medium')"
+  >
+    <app-status-badge [cancelled]="data.sale.isCancelled" />
+    @if (!data.sale.isCancelled) {
+      <a
+        appButton="primary"
+        [routerLink]="['/sales', data.sale.id, 'edit']"
+        [queryParams]="{ returnUrl }"
+        >Edit sale</a
+      >
+    }
+  </app-page-header>
 
   @if (actionError()) {
-    <div class="alert" role="alert">
-      <span>{{ actionError() }}</span>
+    <app-alert [tone]="conflict() ? 'warning' : 'danger'" title="The action could not be completed">
+      {{ actionError() }}
       @if (conflict()) {
-        <button type="button" (click)="refreshAfterConflict()">Reload current sale</button>
+        <button alertAction appButton="link" type="button" (click)="refreshAfterConflict()">
+          Reload current sale
+        </button>
       }
-    </div>
+    </app-alert>
   }
 
-  <section class="summary">
-    <article>
-      <span>Total</span><strong>{{ data.sale.totalAmount | currency: 'BRL' }}</strong>
+  <section class="summary" aria-label="Sale information">
+    <article class="total-card">
+      <span>Total</span><strong class="ui-money">{{ data.sale.totalAmount | money }}</strong>
     </article>
     <article>
       <span>Sale date</span><strong>{{ data.sale.saleDate | date: 'medium' }}</strong>
@@ -49,68 +61,98 @@
     </article>
   </section>
 
-  <section class="items-card">
+  <section class="items-card" aria-labelledby="sale-items-title">
     <div class="section-title">
       <div>
-        <p>Line items</p>
-        <h2>{{ data.sale.items.length }} products</h2>
+        <h2 id="sale-items-title">Items</h2>
+        <p>
+          {{ data.sale.items.length }}
+          {{ data.sale.items.length === 1 ? 'product' : 'products' }} stored with this sale.
+        </p>
       </div>
     </div>
-    <div class="items">
-      @for (item of data.sale.items; track item.id) {
-        <article class="item" [class.item-cancelled]="item.isCancelled">
-          <div class="product">
-            <strong>{{ item.product.name }}</strong
-            ><small>{{ item.product.externalId }}</small>
-          </div>
-          <dl>
-            <div>
-              <dt>Qty.</dt>
-              <dd>{{ item.quantity }}</dd>
-            </div>
-            <div>
-              <dt>Unit price</dt>
-              <dd>{{ item.unitPrice | currency: 'BRL' }}</dd>
-            </div>
-            <div>
-              <dt>Gross</dt>
-              <dd>{{ item.grossAmount | currency: 'BRL' }}</dd>
-            </div>
-            <div>
-              <dt>Discount</dt>
-              <dd>
-                {{ item.discountRate | percent }} · {{ item.discountAmount | currency: 'BRL' }}
-              </dd>
-            </div>
-            <div>
-              <dt>Effective</dt>
-              <dd>{{ item.effectiveAmount | currency: 'BRL' }}</dd>
-            </div>
-          </dl>
-          <div class="item-action">
-            @if (item.isCancelled) {
-              <span>Cancelled {{ item.cancelledAt | date: 'short' }}</span>
-            } @else if (!data.sale.isCancelled) {
-              <button type="button" (click)="cancelItem(item.id)" [disabled]="actionPending()">
-                Cancel item
-              </button>
-            }
-          </div>
-        </article>
-      }
+    <div class="table-scroll">
+      <table>
+        <caption class="sr-only">
+          Products included in
+          {{
+            data.sale.saleNumber
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Product</th>
+            <th scope="col" class="align-right">Qty.</th>
+            <th scope="col" class="align-right">Unit price</th>
+            <th scope="col" class="align-right">Gross</th>
+            <th scope="col" class="align-right">Discount</th>
+            <th scope="col" class="align-right">Effective</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of data.sale.items; track item.id) {
+            <tr [class.item-cancelled]="item.isCancelled">
+              <td data-label="Product">
+                <strong>{{ item.product.name }}</strong
+                ><small>{{ item.product.externalId }}</small>
+              </td>
+              <td data-label="Quantity" class="align-right">{{ item.quantity }}</td>
+              <td data-label="Unit price" class="align-right ui-money">
+                {{ item.unitPrice | money }}
+              </td>
+              <td data-label="Gross" class="align-right ui-money">
+                {{ item.grossAmount | money }}
+              </td>
+              <td data-label="Discount" class="align-right ui-money discount">
+                −{{ item.discountAmount | money }}<small>{{ item.discountRate | percent }}</small>
+              </td>
+              <td data-label="Effective" class="align-right ui-money">
+                {{ item.effectiveAmount | money }}
+              </td>
+              <td data-label="Status"><app-status-badge [cancelled]="item.isCancelled" /></td>
+              <td data-label="Actions" class="item-action">
+                @if (!item.isCancelled && !data.sale.isCancelled) {
+                  <button
+                    appButton="ghost"
+                    size="sm"
+                    type="button"
+                    (click)="cancelItem(item.id)"
+                    [disabled]="actionPending()"
+                  >
+                    Cancel item
+                  </button>
+                } @else if (item.cancelledAt) {
+                  <span>Cancelled {{ item.cancelledAt | date: 'short' }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </div>
   </section>
 
-  <section class="actions" aria-label="Sale actions">
-    @if (!data.sale.isCancelled) {
-      <a class="edit" [routerLink]="['/sales', data.sale.id, 'edit']" [queryParams]="{ returnUrl }"
-        >Edit sale</a
-      ><button type="button" (click)="cancelSale()" [disabled]="actionPending()">
-        Cancel sale
+  <section class="danger-zone" aria-labelledby="danger-zone-title">
+    <div>
+      <h2 id="danger-zone-title">Sale lifecycle</h2>
+      <p>These actions affect the availability of this sale and cannot be undone.</p>
+    </div>
+    <div class="danger-zone__actions">
+      @if (!data.sale.isCancelled) {
+        <button
+          appButton="secondary"
+          type="button"
+          (click)="cancelSale()"
+          [disabled]="actionPending()"
+        >
+          Cancel sale
+        </button>
+      }
+      <button appButton="danger" type="button" (click)="deleteSale()" [disabled]="actionPending()">
+        Delete sale
       </button>
-    }
-    <button class="danger" type="button" (click)="deleteSale()" [disabled]="actionPending()">
-      Delete sale
-    </button>
+    </div>
   </section>
 }

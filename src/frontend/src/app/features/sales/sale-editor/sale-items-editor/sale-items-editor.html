@@ -1,0 +1,141 @@
+<section class="card item-section" aria-labelledby="items-title">
+  <div class="section-heading">
+    <div>
+      <h2 id="items-title">Items</h2>
+      <p>Products, quantities and prices included in this sale.</p>
+    </div>
+    <button
+      appButton="secondary"
+      size="sm"
+      type="button"
+      (click)="addItem()"
+      [disabled]="items().length >= 100"
+    >
+      <app-icon name="plus" /> Add item
+    </button>
+  </div>
+
+  <div class="item-column-headings" aria-hidden="true">
+    <span>Product</span><span>Qty.</span><span>Unit price</span><span>Gross</span
+    ><span>Discount</span><span>Total</span><span></span>
+  </div>
+
+  <div class="item-list">
+    @for (item of items().controls; track item; let index = $index) {
+      <article class="item-form" [formGroup]="item" [attr.data-item-index]="index">
+        <div class="product-fields">
+          <label>
+            <span>Product ID</span>
+            <input
+              formControlName="productExternalId"
+              [attr.aria-invalid]="
+                item.controls.productExternalId.invalid && item.controls.productExternalId.touched
+              "
+              [attr.aria-describedby]="'product-id-error-' + index"
+            />
+            <small [id]="'product-id-error-' + index" class="field-error">{{
+              errorFor()(item.controls.productExternalId, 'items[' + index + '].product.externalId')
+            }}</small>
+          </label>
+          <label>
+            <span>Product name</span>
+            <input
+              formControlName="productName"
+              [attr.aria-invalid]="
+                item.controls.productName.invalid && item.controls.productName.touched
+              "
+              [attr.aria-describedby]="'product-name-error-' + index"
+            />
+            <small [id]="'product-name-error-' + index" class="field-error">{{
+              errorFor()(item.controls.productName, 'items[' + index + '].product.name')
+            }}</small>
+          </label>
+        </div>
+        <label class="compact-input">
+          <span>Quantity</span>
+          <input
+            type="number"
+            min="1"
+            max="20"
+            step="1"
+            formControlName="quantity"
+            [attr.aria-invalid]="item.controls.quantity.invalid && item.controls.quantity.touched"
+            [attr.aria-describedby]="'quantity-error-' + index"
+          />
+          <small [id]="'quantity-error-' + index" class="field-error">{{
+            errorFor()(item.controls.quantity, 'items[' + index + '].quantity')
+          }}</small>
+        </label>
+        <label class="compact-input">
+          <span>Unit price</span>
+          <div class="currency-input">
+            <span aria-hidden="true">R$</span
+            ><input
+              type="number"
+              min="0.01"
+              max="1000000"
+              step="0.01"
+              formControlName="unitPrice"
+              [attr.aria-invalid]="
+                item.controls.unitPrice.invalid && item.controls.unitPrice.touched
+              "
+              [attr.aria-describedby]="'unit-price-error-' + index"
+            />
+          </div>
+          <small [id]="'unit-price-error-' + index" class="field-error">{{
+            errorFor()(item.controls.unitPrice, 'items[' + index + '].unitPrice')
+          }}</small>
+        </label>
+        <dl class="calculated-values">
+          <div>
+            <dt>Gross</dt>
+            <dd>{{ preview(index).grossAmount | money }}</dd>
+          </div>
+          <div>
+            <dt>Discount</dt>
+            <dd class="discount">−{{ preview(index).discountAmount | money }}</dd>
+            <small>{{ preview(index).discountRate | percent }}</small>
+          </div>
+          <div>
+            <dt>Total</dt>
+            <dd>{{ preview(index).totalAmount | money }}</dd>
+          </div>
+        </dl>
+        <button
+          class="remove-item"
+          type="button"
+          (click)="itemRemoved.emit(index)"
+          [disabled]="items().length <= 1"
+          [attr.aria-label]="'Remove item ' + (index + 1)"
+          [attr.title]="items().length <= 1 ? 'A sale needs at least one item' : 'Remove item'"
+        >
+          <app-icon name="trash" />
+        </button>
+      </article>
+    }
+  </div>
+
+  @if (items().hasError('duplicateProduct') && items().touched) {
+    <p class="array-error" role="alert">Each product external ID must be unique.</p>
+  }
+
+  <aside class="totals" aria-label="Sale preview totals">
+    <dl>
+      <div>
+        <dt>Subtotal</dt>
+        <dd>{{ grossTotal() | money }}</dd>
+      </div>
+      @if (discountTotal() > 0) {
+        <div>
+          <dt>Discount</dt>
+          <dd class="discount">−{{ discountTotal() | money }}</dd>
+        </div>
+      }
+      <div class="grand-total">
+        <dt>Total</dt>
+        <dd>{{ total() | money }}</dd>
+      </div>
+    </dl>
+    <p>Final calculated values are confirmed by the API after saving.</p>
+  </aside>
+</section>
