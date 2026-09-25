@@ -1,4 +1,4 @@
-@host = http://localhost:8080
+@host = http://localhost:5119
 @token = replace-with-a-manager-or-admin-jwt
 @saleId = 8a1b7df3-921f-45cc-9dea-9131c6f8eb7f
 @itemId = 3fd35493-1739-40c8-8f31-ee7cdb615fd7

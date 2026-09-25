@@ -2,6 +2,8 @@
 
 # Development setup
 
+For the complete reviewer workflow, architecture, demonstration script, validation evidence, and known limitations, see [Setup and delivery guide](setup-and-delivery.md).
+
 The API requires a JWT signing key with at least 32 bytes. Keep this key outside committed configuration.
 
 ## Rider or `dotnet run`
