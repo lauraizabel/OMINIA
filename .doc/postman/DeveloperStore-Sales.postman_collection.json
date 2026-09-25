@@ -1,0 +1,846 @@
+{
+  "info": {
+    "_postman_id": "8f02493d-73ca-4f85-b986-b5333d7eb87a",
+    "name": "DeveloperStore Sales API — Reviewer Collection",
+    "description": "A review-ready collection for the DeveloperStore sales delivery. Run folders in order. Authentication stores the JWT automatically; sale requests capture IDs and strong ETags; the concurrency folder proves stale-write protection; cleanup requests remove generated sales. No credential is stored in this exported collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5119",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.test",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleNumber",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleItemId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "secondSaleItemId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleEtag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "concurrencySaleNumber",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "concurrencySaleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "concurrencyItemId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staleEtag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "concurrencyEtag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invalidSaleNumber",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Health and readiness",
+      "description": "Public probes used by operators and container orchestration.",
+      "item": [
+        {
+          "name": "Liveness — process responds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/live",
+            "description": "Confirms that the API process can respond. It does not depend on PostgreSQL.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Liveness returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is fast enough for a local probe', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Readiness — PostgreSQL is reachable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/ready",
+            "description": "Confirms that required dependencies are ready. PostgreSQL outages return 503.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Readiness returns 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Authentication",
+      "description": "Authenticate once. The post-response script stores `data.token` as the collection variable `accessToken`, inherited by every protected request.",
+      "item": [
+        {
+          "name": "Login and capture JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Uses the development administrator configured outside Git. A successful response automatically updates the bearer token used by the remaining folders.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login returns 200', () => pm.response.to.have.status(200));",
+                  "const payload = pm.response.json();",
+                  "pm.test('Response contains a bearer token', () => {",
+                  "  pm.expect(payload.data).to.be.an('object');",
+                  "  pm.expect(payload.data.token).to.be.a('string');",
+                  "  pm.expect(payload.data.token.length).to.be.greaterThan(20);",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', payload.data.token);",
+                  "pm.test('Authenticated role can operate sales', () => pm.expect(['Manager', 'Admin']).to.include(payload.data.role));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Complete sales lifecycle",
+      "description": "A deterministic create/read/list/update/cancel/delete demonstration. Run this folder in order after Authentication.",
+      "item": [
+        {
+          "name": "Create sale — capture IDs and ETag",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Creates two lines. Four units receive 10% discount; two units receive no discount. The script stores the sale ID, both item IDs, and the strong ETag.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"{{saleNumber}}\",\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CUSTOMER-001\",\n    \"name\": \"Postman Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-BRANCH-001\",\n    \"name\": \"Postman Branch\"\n  },\n  \"items\": [\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-P001\",\n        \"name\": \"Discounted Product\"\n      },\n      \"quantity\": 4,\n      \"unitPrice\": 10.0\n    },\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-P002\",\n        \"name\": \"Regular Product\"\n      },\n      \"quantity\": 2,\n      \"unitPrice\": 5.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;",
+                  "pm.collectionVariables.set('saleNumber', `POSTMAN-${suffix}`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Create returns 201', () => pm.response.to.have.status(201));",
+                  "const sale = pm.response.json();",
+                  "pm.collectionVariables.set('saleId', sale.id);",
+                  "pm.collectionVariables.set('saleEtag', pm.response.headers.get('ETag'));",
+                  "const discounted = sale.items.find(item => item.product.externalId === 'POSTMAN-P001');",
+                  "const regular = sale.items.find(item => item.product.externalId === 'POSTMAN-P002');",
+                  "pm.expect(discounted, 'discounted product line').to.exist;",
+                  "pm.expect(regular, 'regular product line').to.exist;",
+                  "pm.collectionVariables.set('saleItemId', discounted.id);",
+                  "pm.collectionVariables.set('secondSaleItemId', regular.id);",
+                  "pm.test('Four units receive 10% discount', () => {",
+                  "  pm.expect(discounted.discountRate).to.eql(0.1);",
+                  "  pm.expect(discounted.grossAmount).to.eql(40);",
+                  "  pm.expect(discounted.discountAmount).to.eql(4);",
+                  "  pm.expect(discounted.totalAmount).to.eql(36);",
+                  "});",
+                  "pm.test('Sale total is calculated by the API', () => pm.expect(sale.totalAmount).to.eql(47));",
+                  "pm.test('Location and ETag are returned', () => {",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include(sale.id);",
+                  "  pm.expect(pm.collectionVariables.get('saleEtag')).to.match(/^\"sale-\\d+\"$/);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get sale — refresh ETag",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Reads the aggregate, including cancelled lines, and refreshes the ETag used by later mutations."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Detail returns 200', () => pm.response.to.have.status(200));",
+                  "const sale = pm.response.json();",
+                  "pm.test('Correct sale is returned', () => pm.expect(sale.id).to.eql(pm.collectionVariables.get('saleId')));",
+                  "pm.collectionVariables.set('saleEtag', pm.response.headers.get('ETag'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List sale — filter, order, and paginate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales?_page=1&_size=10&_order=saleDate%20desc&saleNumber={{saleNumber}}",
+            "description": "Exercises database-side filtering, stable ordering, and pagination using the generated sale number."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('List returns 200', () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json();",
+                  "pm.test('Generated sale is present', () => {",
+                  "  pm.expect(page.data).to.be.an('array');",
+                  "  pm.expect(page.data.some(sale => sale.id === pm.collectionVariables.get('saleId'))).to.eql(true);",
+                  "});",
+                  "pm.test('Pagination metadata is present', () => {",
+                  "  pm.expect(page.currentPage).to.eql(1);",
+                  "  pm.expect(page.totalItems).to.be.at.least(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update sale — move to the 20% tier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{saleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Changes the discounted line from four to ten units. The latest captured ETag is sent through If-Match and replaced with the response ETag.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CUSTOMER-001\",\n    \"name\": \"Postman Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-BRANCH-001\",\n    \"name\": \"Postman Branch\"\n  },\n  \"items\": [\n    {\n      \"id\": \"{{saleItemId}}\",\n      \"product\": {\n        \"externalId\": \"POSTMAN-P001\",\n        \"name\": \"Discounted Product\"\n      },\n      \"quantity\": 10,\n      \"unitPrice\": 10.0\n    },\n    {\n      \"id\": \"{{secondSaleItemId}}\",\n      \"product\": {\n        \"externalId\": \"POSTMAN-P002\",\n        \"name\": \"Regular Product\"\n      },\n      \"quantity\": 2,\n      \"unitPrice\": 5.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Update returns 200', () => pm.response.to.have.status(200));",
+                  "const sale = pm.response.json();",
+                  "const discounted = sale.items.find(item => item.id === pm.collectionVariables.get('saleItemId'));",
+                  "pm.test('Ten units receive 20% discount', () => {",
+                  "  pm.expect(discounted.quantity).to.eql(10);",
+                  "  pm.expect(discounted.discountRate).to.eql(0.2);",
+                  "  pm.expect(discounted.totalAmount).to.eql(80);",
+                  "  pm.expect(sale.totalAmount).to.eql(91);",
+                  "});",
+                  "pm.collectionVariables.set('saleEtag', pm.response.headers.get('ETag'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel discounted item — retain history",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{saleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/items/{{saleItemId}}/cancel",
+            "description": "Cancels one line without deleting it. The second line remains active, so the sale remains open with an effective total of BRL 11.00."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Item cancellation returns 200', () => pm.response.to.have.status(200));",
+                  "const sale = pm.response.json();",
+                  "const item = sale.items.find(line => line.id === pm.collectionVariables.get('saleItemId'));",
+                  "pm.test('Cancelled history is retained and excluded from effective total', () => {",
+                  "  pm.expect(item.isCancelled).to.eql(true);",
+                  "  pm.expect(item.effectiveAmount).to.eql(0);",
+                  "  pm.expect(sale.isCancelled).to.eql(false);",
+                  "  pm.expect(sale.totalAmount).to.eql(11);",
+                  "});",
+                  "pm.collectionVariables.set('saleEtag', pm.response.headers.get('ETag'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel sale — capture final ETag",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{saleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/cancel",
+            "description": "Cancels every remaining active line and preserves the complete historical snapshot."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sale cancellation returns 200', () => pm.response.to.have.status(200));",
+                  "const sale = pm.response.json();",
+                  "pm.test('Sale and all lines are cancelled', () => {",
+                  "  pm.expect(sale.isCancelled).to.eql(true);",
+                  "  pm.expect(sale.totalAmount).to.eql(0);",
+                  "  pm.expect(sale.items.every(item => item.isCancelled)).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set('saleEtag', pm.response.headers.get('ETag'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete sale — soft delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{saleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Soft-deletes the sale with its latest ETag. History remains in PostgreSQL but disappears from public reads."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delete returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted sale — verify 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Confirms that a soft-deleted sale is absent from the public detail endpoint."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deleted sale returns 404', () => pm.response.to.have.status(404));",
+                  "const error = pm.response.json();",
+                  "pm.test('Error contract contains a trace ID', () => pm.expect(error.traceId).to.be.a('string'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Optimistic concurrency",
+      "description": "Creates an isolated aggregate, performs one valid write, proves that a second write with the stale ETag receives 412, and then cleans up.",
+      "item": [
+        {
+          "name": "Create concurrency fixture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Creates a dedicated sale and stores its first ETag as both the stale token and the current token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"{{concurrencySaleNumber}}\",\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-C\",\n    \"name\": \"Concurrency Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-B\",\n    \"name\": \"Concurrency Branch\"\n  },\n  \"items\": [\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-CONCURRENCY-P\",\n        \"name\": \"Concurrency Product\"\n      },\n      \"quantity\": 4,\n      \"unitPrice\": 20.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;",
+                  "pm.collectionVariables.set('concurrencySaleNumber', `POSTMAN-CONCURRENCY-${suffix}`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Fixture creation returns 201', () => pm.response.to.have.status(201));",
+                  "const sale = pm.response.json();",
+                  "const etag = pm.response.headers.get('ETag');",
+                  "pm.collectionVariables.set('concurrencySaleId', sale.id);",
+                  "pm.collectionVariables.set('concurrencyItemId', sale.items[0].id);",
+                  "pm.collectionVariables.set('staleEtag', etag);",
+                  "pm.collectionVariables.set('concurrencyEtag', etag);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "First writer succeeds",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{staleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{concurrencySaleId}}",
+            "description": "Uses the original ETag successfully and stores the new ETag without replacing `staleEtag`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-C\",\n    \"name\": \"Concurrency Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-B\",\n    \"name\": \"Concurrency Branch\"\n  },\n  \"items\": [\n    {\n      \"id\": \"{{concurrencyItemId}}\",\n      \"product\": {\n        \"externalId\": \"POSTMAN-CONCURRENCY-P\",\n        \"name\": \"Concurrency Product\"\n      },\n      \"quantity\": 5,\n      \"unitPrice\": 20.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('First writer returns 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('concurrencyEtag', pm.response.headers.get('ETag'));",
+                  "pm.test('Version advanced', () => pm.expect(pm.collectionVariables.get('concurrencyEtag')).not.to.eql(pm.collectionVariables.get('staleEtag')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Second writer with stale ETag is rejected",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{staleEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{concurrencySaleId}}",
+            "description": "Reuses the original ETag after another write. The API must preserve the stored state and return 412.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-C\",\n    \"name\": \"Concurrency Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-CONCURRENCY-B\",\n    \"name\": \"Concurrency Branch\"\n  },\n  \"items\": [\n    {\n      \"id\": \"{{concurrencyItemId}}\",\n      \"product\": {\n        \"externalId\": \"POSTMAN-CONCURRENCY-P\",\n        \"name\": \"Concurrency Product\"\n      },\n      \"quantity\": 6,\n      \"unitPrice\": 20.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Stale writer returns 412', () => pm.response.to.have.status(412));",
+                  "const error = pm.response.json();",
+                  "pm.test('Concurrency error is explicit', () => pm.expect(error.type).to.eql('ConcurrencyConflict'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete concurrency fixture",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{concurrencyEtag}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{concurrencySaleId}}",
+            "description": "Removes the fixture using the current ETag captured from the successful first writer."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Fixture cleanup returns 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Validation and security examples",
+      "description": "Independent negative examples. They assert status codes and the normalized error contract without creating persistent sales.",
+      "item": [
+        {
+          "name": "Quantity above 20 — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Proves the maximum quantity rule. The transaction is rejected before persistence.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"{{invalidSaleNumber}}-QTY\",\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-INVALID-C\",\n    \"name\": \"Invalid Example Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-INVALID-B\",\n    \"name\": \"Invalid Example Branch\"\n  },\n  \"items\": [\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-INVALID-P\",\n        \"name\": \"Invalid Quantity Product\"\n      },\n      \"quantity\": 21,\n      \"unitPrice\": 10.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('invalidSaleNumber', `POSTMAN-INVALID-${Date.now()}`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Invalid quantity returns 400', () => pm.response.to.have.status(400));",
+                  "const error = pm.response.json();",
+                  "pm.test('Field errors are returned', () => pm.expect(error.errors).to.be.an('array').that.is.not.empty);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate product — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Proves that one external product ID cannot appear twice in the same aggregate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"{{invalidSaleNumber}}-DUP\",\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-INVALID-C\",\n    \"name\": \"Invalid Example Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-INVALID-B\",\n    \"name\": \"Invalid Example Branch\"\n  },\n  \"items\": [\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-DUP-P\",\n        \"name\": \"Duplicate Product\"\n      },\n      \"quantity\": 2,\n      \"unitPrice\": 10.0\n    },\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-DUP-P\",\n        \"name\": \"Duplicate Product\"\n      },\n      \"quantity\": 3,\n      \"unitPrice\": 10.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('invalidSaleNumber', `POSTMAN-INVALID-${Date.now()}`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Duplicate product returns 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing If-Match — 428",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Shows that every mutation of an existing sale requires an explicit concurrency precondition."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Missing precondition returns 428', () => pm.response.to.have.status(428));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Anonymous sales access — 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Overrides collection authentication and proves that sales are not public.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Anonymous access returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid bearer token — 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Uses an intentionally invalid non-secret token to demonstrate signature and format enforcement.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not-a-valid-jwt",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Invalid token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
