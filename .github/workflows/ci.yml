@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.416
+      - name: Restore
+        run: dotnet restore Ambev.DeveloperEvaluation.sln
+      - name: Build
+        run: dotnet build Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
+      - name: Test
+        run: >-
+          dotnet test Ambev.DeveloperEvaluation.sln
+          --configuration Release
+          --no-build
+          --logger "trx"
+          --collect "XPlat Code Coverage"
+          --results-directory artifacts/backend
+      - name: Upload backend results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-results
+          path: artifacts/backend
+          if-no-files-found: warn
+          retention-days: 7
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc -p tsconfig.app.json --noEmit
+      - name: Unit tests and coverage
+        run: >-
+          npm run test:ci --
+          --coverage
+          --coverage-reporters=cobertura
+          --coverage-reporters=text-summary
+          --reporters=junit
+          --output-file=artifacts/frontend/junit.xml
+      - run: npm run build
+      - name: Upload frontend results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-results
+          path: |
+            src/frontend/artifacts/frontend
+            src/frontend/coverage/frontend
+          if-no-files-found: warn
+          retention-days: 7
+
+  coverage:
+    name: Code coverage
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.416
+      - name: Download backend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-test-results
+          path: artifacts/coverage-input/backend
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-test-results
+          path: artifacts/coverage-input/frontend
+      - name: Generate combined coverage report
+        shell: bash
+        run: |
+          dotnet tool install dotnet-reportgenerator-globaltool \
+            --tool-path .tools \
+            --version 5.5.11
+          .tools/reportgenerator \
+            '-reports:artifacts/coverage-input/**/coverage.cobertura.xml;artifacts/coverage-input/**/cobertura-coverage.xml' \
+            '-targetdir:artifacts/coverage-report' \
+            '-reporttypes:Cobertura;MarkdownSummaryGithub'
+          cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload combined coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: combined-code-coverage
+          path: artifacts/coverage-report
+          if-no-files-found: error
+          retention-days: 7
+
+  e2e:
+    name: Isolated browser suite
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E
+        run: npm run test:e2e
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-failure
+          path: |
+            src/frontend/playwright-report
+            src/frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-results
+          path: src/frontend/artifacts/e2e
+          if-no-files-found: warn
+          retention-days: 7
+
+  compose-smoke:
+    name: Container stack smoke
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate ephemeral configuration
+        shell: bash
+        run: |
+          database_password="$(openssl rand -hex 24)"
+          jwt_secret="$(openssl rand -hex 48)"
+          admin_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$database_password"
+          echo "::add-mask::$jwt_secret"
+          echo "::add-mask::$admin_password"
+          {
+            echo "POSTGRES_PASSWORD=$database_password"
+            echo "DATABASE_CONNECTION_STRING=Host=database;Port=5432;Database=developer_evaluation;Username=developer;Password=$database_password"
+            echo "JWT_SECRET_KEY=$jwt_secret"
+            echo "DEVELOPMENT_ADMIN_ENABLED=true"
+            echo "DEVELOPMENT_ADMIN_EMAIL=ci.admin@example.test"
+            echo "DEVELOPMENT_ADMIN_PASSWORD=$admin_password"
+          } >> "$GITHUB_ENV"
+      - name: Build and start stack
+        run: docker compose up --detach --build --wait --wait-timeout 240
+      - name: Verify frontend, API proxy, and authentication
+        shell: bash
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:4200/health
+          curl --fail --silent --show-error http://127.0.0.1:5119/health/ready > /dev/null
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data "{\"email\":\"$DEVELOPMENT_ADMIN_EMAIL\",\"password\":\"$DEVELOPMENT_ADMIN_PASSWORD\"}" \
+            http://127.0.0.1:4200/api/auth > /dev/null
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Remove stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
