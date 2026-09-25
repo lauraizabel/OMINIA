@@ -3,22 +3,51 @@ import { expect, test } from './support/fixtures';
 import { createSale, fillSale, findSale, uniqueSale } from './support/sales';
 import { signIn } from './support/session';
 
-test('E10 does not retry a create command after the response is interrupted', async ({ page }) => {
+test('E10 does not retry a create command after the response is interrupted', async ({
+  page,
+  request,
+}) => {
   const sale = uniqueSale('E2E-NORETRY');
   await signIn(page);
   await page.getByRole('link', { name: 'New sale' }).click();
+  await expect(page).toHaveURL(/\/sales\/new/);
   await fillSale(page, sale);
 
   let createRequests = 0;
+  let resolvePersistedStatus!: (status: number) => void;
+  let rejectPersistence!: (reason: unknown) => void;
+  const persistedStatus = new Promise<number>((resolve, reject) => {
+    resolvePersistedStatus = resolve;
+    rejectPersistence = reject;
+  });
+
   await page.route('**/api/sales', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     createRequests += 1;
-    await route.fetch();
-    await route.abort('connectionreset');
+    const interceptedRequest = route.request();
+
+    try {
+      // Persist the command independently, then fail only the browser request. This
+      // models a lost response without relying on route.fetch() abort timing.
+      const persistedResponse = await request.post(interceptedRequest.url(), {
+        data: interceptedRequest.postDataJSON(),
+        headers: {
+          authorization: interceptedRequest.headers()['authorization'],
+        },
+      });
+      resolvePersistedStatus(persistedResponse.status());
+      await route.abort('failed');
+    } catch (error) {
+      rejectPersistence(error);
+      await route.abort('failed');
+    }
   });
+
   await page.getByRole('button', { name: 'Create sale' }).click();
-  await expect(page.getByText(/verify the sale before resubmitting/i)).toBeVisible();
-  await page.waitForTimeout(750);
+  await Promise.all([
+    expect(persistedStatus).resolves.toBe(201),
+    expect(page.getByText(/verify the sale before resubmitting/i)).toBeVisible(),
+  ]);
   expect(createRequests).toBe(1);
 
   await page.unroute('**/api/sales');

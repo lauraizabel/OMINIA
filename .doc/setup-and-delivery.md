@@ -329,7 +329,7 @@ Reports are retained as workflow artifacts for seven days. Raising backend and f
 - Structured event logging is not durable. A process failure after the database commit can lose an event; a transactional outbox and idempotent consumer are the intended production evolution.
 - Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
-- The latest clean CI run needed one retry for the E10 interrupted-response browser scenario. The scenario completed successfully, but its synchronization must be hardened so a first-attempt failure cannot be masked by Playwright retries.
+- The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
 - The current combined coverage is below the planned 90% per-application quality gate, although critical rules and end-to-end paths are covered.
 - AutoMapper 13.0.1 has the advisory recorded in [dependency-inventory.md](dependency-inventory.md). Replacing inherited mappings with explicit mappings is preferred over adopting the later commercial-license line without review.
 - The repository does not include cloud infrastructure, deployment automation, a message broker, or production observability exporters.

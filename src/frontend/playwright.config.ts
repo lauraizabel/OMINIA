@@ -9,6 +9,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
+  failOnFlakyTests: Boolean(process.env['CI']),
   // The API deliberately rate-limits login and the tests share one configured account.
   // Keep the suite serial while individual scenarios can still open concurrent contexts.
   workers: 1,
