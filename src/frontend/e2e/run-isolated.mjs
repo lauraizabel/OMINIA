@@ -11,6 +11,7 @@ const adminEmail = 'e2e.admin@example.test';
 const adminPassword = randomBytes(24).toString('base64url');
 const databasePassword = randomBytes(24).toString('base64url');
 const jwtSecret = randomBytes(48).toString('base64url');
+const playwrightArguments = process.argv.slice(2);
 const environment = {
   ...process.env,
   POSTGRES_PASSWORD: databasePassword,
@@ -48,9 +49,11 @@ const composeArguments = [
 
 try {
   await run(docker, [...composeArguments, 'up', '--build', '-d', '--wait']);
-  const result = await run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test'], {
-    rejectOnError: false,
-  });
+  const result = await run(
+    process.execPath,
+    ['node_modules/@playwright/test/cli.js', 'test', ...playwrightArguments],
+    { rejectOnError: false },
+  );
   process.exitCode = result;
 } finally {
   stopping = true;

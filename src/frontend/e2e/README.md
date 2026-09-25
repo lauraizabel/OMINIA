@@ -30,6 +30,14 @@ npm run test:e2e
 
 The command builds and starts disposable API and PostgreSQL containers, generates credentials in memory, runs the browser suite, and removes containers and volumes in a `finally` block.
 
+Arguments after `--` are forwarded to Playwright. For example, this command repeats the interrupted-response scenario without retries while reusing one isolated stack:
+
+```powershell
+npm run test:e2e -- resilience-accessibility.spec.ts --grep E10 --repeat-each=10 --retries=0
+```
+
+CI retries unexpected browser failures to retain diagnostic evidence, but `failOnFlakyTests` makes the job fail when any test needs a retry.
+
 To test an already running stack, configure an active `Manager` or `Admin` account outside Git and run:
 
 ```powershell
