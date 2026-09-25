@@ -10,15 +10,20 @@ public sealed class DefaultContextFactory : IDesignTimeDbContextFactory<DefaultC
 
     public DefaultContext CreateDbContext(string[] args)
     {
-        var webApiDirectory = FindWebApiDirectory(Directory.GetCurrentDirectory());
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(webApiDirectory)
-            .AddJsonFile("appsettings.json")
-            .AddJsonFile("appsettings.Development.json", optional: true)
-            .AddEnvironmentVariables()
-            .Build();
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            var webApiDirectory = FindWebApiDirectory(Directory.GetCurrentDirectory());
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(webApiDirectory)
+                .AddJsonFile("appsettings.json")
+                .AddJsonFile("appsettings.Development.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
 
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+            connectionString = configuration.GetConnectionString("DefaultConnection");
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         var options = new DbContextOptionsBuilder<DefaultContext>()

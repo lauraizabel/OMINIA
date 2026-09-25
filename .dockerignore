@@ -13,14 +13,19 @@
 **/*.jfm
 **/azds.yaml
 **/bin
+**/artifacts
 **/charts
+**/coverage
+**/dist
 **/docker-compose*
 **/Dockerfile*
 **/node_modules
 **/npm-debug.log
 **/obj
+**/playwright-report
 **/secrets.dev.yaml
 **/values.dev.yaml
+**/test-results
 LICENSE
 README.md
 !**/.gitignore
@@ -29,4 +34,5 @@ README.md
 !.git/packed-refs
 !.git/refs/heads/**
 **/.idea
+**/.angular
 private-planning

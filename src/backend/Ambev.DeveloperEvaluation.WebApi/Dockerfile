@@ -1,10 +1,13 @@
 #See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+USER root
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 USER app
 WORKDIR /app
 EXPOSE 8080
-EXPOSE 8081
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
@@ -20,9 +23,23 @@ COPY . .
 WORKDIR "/src/src/backend/Ambev.DeveloperEvaluation.WebApi"
 RUN dotnet build "./Ambev.DeveloperEvaluation.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
+FROM build AS migrations-build
+RUN export ConnectionStrings__DefaultConnection='Host=localhost;Database=build;Username=build' \
+    && dotnet tool restore \
+    && dotnet tool run dotnet-ef migrations bundle \
+      --project /src/src/backend/Ambev.DeveloperEvaluation.ORM/Ambev.DeveloperEvaluation.ORM.csproj \
+      --startup-project /src/src/backend/Ambev.DeveloperEvaluation.WebApi/Ambev.DeveloperEvaluation.WebApi.csproj \
+      --configuration Release \
+      --output /app/migrate \
+      --force
+
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./Ambev.DeveloperEvaluation.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+FROM base AS migrations
+COPY --from=migrations-build --chown=app:app /app/migrate /app/migrate
+ENTRYPOINT ["/app/migrate"]
 
 FROM base AS final
 WORKDIR /app

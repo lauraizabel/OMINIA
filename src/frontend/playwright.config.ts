@@ -12,7 +12,13 @@ export default defineConfig({
   // The API deliberately rate-limits login and the tests share one configured account.
   // Keep the suite serial while individual scenarios can still open concurrent contexts.
   workers: 1,
-  reporter: process.env['CI'] ? [['line'], ['html', { open: 'never' }]] : 'list',
+  reporter: process.env['CI']
+    ? [
+        ['github'],
+        ['html', { open: 'never' }],
+        ['junit', { outputFile: 'artifacts/e2e/junit.xml' }],
+      ]
+    : 'list',
   use: {
     baseURL,
     trace: 'retain-on-failure',
