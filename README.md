@@ -88,3 +88,59 @@ See [Project Structure](/.doc/project-structure.md)
 ## Development setup
 
 See [Development setup](/.doc/development-setup.md) for local secrets, database migrations, Docker Compose, and the optional development administrator.
+
+The complete reviewer workflow, architecture, demonstration script, validation evidence, and known limitations are available in the [Setup and delivery guide](/.doc/setup-and-delivery.md).
+
+## Run the complete application
+
+Create `.env` from `.env.example`, provide the required local credentials, and start the complete stack:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --detach --build --wait --wait-timeout 240
+```
+
+Open the frontend at `http://localhost:4200`. The API and Swagger are available at `http://localhost:5119` and `http://localhost:5119/swagger`.
+
+## Frontend development and tests
+
+Start the API first, then run the Angular development server:
+
+```powershell
+Set-Location src/frontend
+npm ci
+npm start
+```
+
+Run the frontend quality checks and unit tests from `src/frontend`:
+
+```powershell
+npm run lint
+npx tsc -p tsconfig.app.json --noEmit
+npm run test:ci -- --coverage --coverage-reporters=text-summary
+npm run build
+```
+
+## End-to-end tests
+
+The Playwright suite starts disposable API and PostgreSQL containers, generates credentials in memory, runs the Angular application, and removes its containers and volumes afterward. Docker must be running.
+
+```powershell
+Set-Location src/frontend
+npm ci
+npm run test:e2e:install
+npm run test:e2e
+```
+
+See the [browser integration test guide](/src/frontend/e2e/README.md) for the covered scenarios and instructions for testing an existing environment.
+
+## Postman collection
+
+Import the following files into Postman:
+
+- [DeveloperStore Sales API collection](/.doc/postman/DeveloperStore-Sales.postman_collection.json)
+- [DeveloperStore local environment](/.doc/postman/DeveloperStore-Local.postman_environment.json)
+
+Select the **DeveloperStore — Local** environment and set its secret `adminPassword` value to the development administrator password configured in `.env`. Run the collection in order. Its scripts authenticate automatically and capture the JWT, generated sale IDs, item IDs, and ETags required by later requests.
+
+See the [Postman reviewer workflow](/.doc/postman/README.md) for folder descriptions, automatic variable behavior, cleanup details, and Newman execution.
