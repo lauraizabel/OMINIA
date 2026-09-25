@@ -1,0 +1,133 @@
+<section class="page-heading">
+  <div>
+    <p>Commercial activity</p>
+    <h1>Sales</h1>
+    <span>Find, review and manage sales records.</span>
+  </div>
+  <a class="primary-action" routerLink="/sales/new" [queryParams]="{ returnUrl }">New sale</a>
+</section>
+
+<form class="filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+  <label>Sale number<input formControlName="saleNumber" placeholder="SALE-*" /></label>
+  <label>Customer ID<input formControlName="customerExternalId" /></label>
+  <label>Branch ID<input formControlName="branchExternalId" /></label>
+  <label
+    >Status
+    <select formControlName="status">
+      <option value="">All</option>
+      <option value="active">Active</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+  </label>
+  <label>From date<input type="date" formControlName="minSaleDate" /></label>
+  <label>To date<input type="date" formControlName="maxSaleDate" /></label>
+  <label
+    >Minimum total<input type="number" min="0" step="0.01" formControlName="minTotalAmount"
+  /></label>
+  <label
+    >Maximum total<input type="number" min="0" step="0.01" formControlName="maxTotalAmount"
+  /></label>
+  <label
+    >Order
+    <select formControlName="order">
+      <option value="saleDate desc">Newest first</option>
+      <option value="saleDate asc">Oldest first</option>
+      <option value="saleNumber asc">Sale number A–Z</option>
+      <option value="saleNumber desc">Sale number Z–A</option>
+      <option value="totalAmount desc">Highest total</option>
+      <option value="totalAmount asc">Lowest total</option>
+    </select>
+  </label>
+  <label
+    >Rows
+    <select formControlName="size">
+      <option [ngValue]="10">10</option>
+      <option [ngValue]="25">25</option>
+      <option [ngValue]="50">50</option>
+    </select>
+  </label>
+  <div class="filter-actions">
+    <button class="secondary" type="button" (click)="clearFilters()">Clear</button
+    ><button type="submit">Apply filters</button>
+  </div>
+</form>
+
+@if (loading()) {
+  <section class="state" aria-live="polite">
+    <span class="spinner"></span>
+    <h2>Loading sales…</h2>
+  </section>
+} @else if (error()) {
+  <section class="state error" role="alert">
+    <h2>Sales could not be loaded</h2>
+    <p>{{ error() }}</p>
+    <button type="button" (click)="retry()">Try again</button>
+  </section>
+} @else if (result()?.data?.length === 0) {
+  <section class="state">
+    <h2>No sales found</h2>
+    <p>Change the filters or create the first sale.</p>
+    <a routerLink="/sales/new" [queryParams]="{ returnUrl }">Create sale</a>
+  </section>
+} @else {
+  <section class="table-card">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Sale</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Branch</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sale of result()?.data; track sale.id) {
+            <tr>
+              <td>
+                <strong>{{ sale.saleNumber }}</strong
+                ><small>{{ sale.id }}</small>
+              </td>
+              <td>{{ sale.saleDate | date: 'medium' }}</td>
+              <td>
+                {{ sale.customer.name }}<small>{{ sale.customer.externalId }}</small>
+              </td>
+              <td>
+                {{ sale.branch.name }}<small>{{ sale.branch.externalId }}</small>
+              </td>
+              <td class="money">{{ sale.totalAmount | currency: 'BRL' }}</td>
+              <td>
+                <span class="badge" [class.cancelled]="sale.isCancelled">{{
+                  sale.isCancelled ? 'Cancelled' : 'Active'
+                }}</span>
+              </td>
+              <td>
+                <a class="row-link" [routerLink]="['/sales', sale.id]" [queryParams]="{ returnUrl }"
+                  >View</a
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <footer>
+      <span>{{ result()?.totalItems }} total</span>
+      <div>
+        <button type="button" (click)="previousPage()" [disabled]="query().page <= 1">
+          Previous</button
+        ><span>Page {{ result()?.currentPage }} of {{ result()?.totalPages }}</span
+        ><button
+          type="button"
+          (click)="nextPage()"
+          [disabled]="query().page >= (result()?.totalPages ?? 0)"
+        >
+          Next
+        </button>
+      </div>
+    </footer>
+  </section>
+}

@@ -83,10 +83,15 @@ main {
   header {
     grid-template-columns: 1fr auto;
     gap: 1rem;
-    padding: 0 1rem;
+    padding: 0.75rem 1rem 0;
   }
   nav {
-    display: none;
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  nav a {
+    padding: 0.5rem 0.25rem 0.7rem;
   }
   .account-copy {
     display: none;

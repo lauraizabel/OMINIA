@@ -1,0 +1,116 @@
+<button class="back" type="button" (click)="back()">← Back to sales</button>
+
+@if (loading()) {
+  <section class="state" aria-live="polite">
+    <span class="spinner"></span>
+    <h1>Loading sale…</h1>
+  </section>
+} @else if (error()) {
+  <section class="state" role="alert">
+    <h1>Sale could not be loaded</h1>
+    <p>{{ error() }}</p>
+    <button type="button" (click)="retry()">Try again</button>
+  </section>
+} @else if (resource(); as data) {
+  <header class="page-heading">
+    <div>
+      <p>Sale record</p>
+      <h1>{{ data.sale.saleNumber }}</h1>
+      <span>Updated {{ data.sale.updatedAt | date: 'medium' }}</span>
+    </div>
+    <span class="badge" [class.cancelled]="data.sale.isCancelled">{{
+      data.sale.isCancelled ? 'Cancelled' : 'Active'
+    }}</span>
+  </header>
+
+  @if (actionError()) {
+    <div class="alert" role="alert">
+      <span>{{ actionError() }}</span>
+      @if (conflict()) {
+        <button type="button" (click)="refreshAfterConflict()">Reload current sale</button>
+      }
+    </div>
+  }
+
+  <section class="summary">
+    <article>
+      <span>Total</span><strong>{{ data.sale.totalAmount | currency: 'BRL' }}</strong>
+    </article>
+    <article>
+      <span>Sale date</span><strong>{{ data.sale.saleDate | date: 'medium' }}</strong>
+    </article>
+    <article>
+      <span>Customer</span><strong>{{ data.sale.customer.name }}</strong
+      ><small>{{ data.sale.customer.externalId }}</small>
+    </article>
+    <article>
+      <span>Branch</span><strong>{{ data.sale.branch.name }}</strong
+      ><small>{{ data.sale.branch.externalId }}</small>
+    </article>
+  </section>
+
+  <section class="items-card">
+    <div class="section-title">
+      <div>
+        <p>Line items</p>
+        <h2>{{ data.sale.items.length }} products</h2>
+      </div>
+    </div>
+    <div class="items">
+      @for (item of data.sale.items; track item.id) {
+        <article class="item" [class.item-cancelled]="item.isCancelled">
+          <div class="product">
+            <strong>{{ item.product.name }}</strong
+            ><small>{{ item.product.externalId }}</small>
+          </div>
+          <dl>
+            <div>
+              <dt>Qty.</dt>
+              <dd>{{ item.quantity }}</dd>
+            </div>
+            <div>
+              <dt>Unit price</dt>
+              <dd>{{ item.unitPrice | currency: 'BRL' }}</dd>
+            </div>
+            <div>
+              <dt>Gross</dt>
+              <dd>{{ item.grossAmount | currency: 'BRL' }}</dd>
+            </div>
+            <div>
+              <dt>Discount</dt>
+              <dd>
+                {{ item.discountRate | percent }} · {{ item.discountAmount | currency: 'BRL' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Effective</dt>
+              <dd>{{ item.effectiveAmount | currency: 'BRL' }}</dd>
+            </div>
+          </dl>
+          <div class="item-action">
+            @if (item.isCancelled) {
+              <span>Cancelled {{ item.cancelledAt | date: 'short' }}</span>
+            } @else if (!data.sale.isCancelled) {
+              <button type="button" (click)="cancelItem(item.id)" [disabled]="actionPending()">
+                Cancel item
+              </button>
+            }
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="actions" aria-label="Sale actions">
+    @if (!data.sale.isCancelled) {
+      <a class="edit" [routerLink]="['/sales', data.sale.id, 'edit']" [queryParams]="{ returnUrl }"
+        >Edit sale</a
+      ><button type="button" (click)="cancelSale()" [disabled]="actionPending()">
+        Cancel sale
+      </button>
+    }
+    <button class="danger" type="button" (click)="deleteSale()" [disabled]="actionPending()">
+      Delete sale
+    </button>
+  </section>
+}
