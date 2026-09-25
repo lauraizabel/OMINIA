@@ -18,7 +18,7 @@ export function mapSaleError(error: unknown): SaleErrorState {
 
   const problem = isProblem(error.error) ? error.error : undefined;
   const messages: Record<number, string> = {
-    0: 'The API is unavailable. Check your connection and try again.',
+    0: 'The API is unavailable. Check your connection and verify the sale before resubmitting.',
     400: problem?.detail ?? 'Review the highlighted fields.',
     404: 'This sale no longer exists.',
     409: problem?.detail ?? 'The sale conflicts with the current state.',

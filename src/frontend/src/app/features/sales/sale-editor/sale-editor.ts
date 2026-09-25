@@ -244,11 +244,12 @@ export class SaleEditor implements PendingChangesAware {
   }
 
   private focusFirstInvalid(): void {
-    setTimeout(() =>
-      this.host.nativeElement
-        .querySelector<HTMLElement>('input.ng-invalid, select.ng-invalid, [role="alert"]')
-        ?.focus(),
-    );
+    setTimeout(() => {
+      const invalidControl = this.host.nativeElement.querySelector<HTMLElement>(
+        'input.ng-invalid, select.ng-invalid',
+      );
+      invalidControl?.focus();
+    });
   }
 }
 
