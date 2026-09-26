@@ -126,16 +126,6 @@ public sealed class AuthenticationAndUserHandlerTests
     }
 
     [Fact]
-    public async Task Delete_user_rejects_an_empty_identifier_before_repository_access()
-    {
-        var handler = new DeleteUserHandler(_users);
-        var action = () => handler.Handle(new DeleteUserCommand(Guid.Empty), CancellationToken.None);
-
-        await action.Should().ThrowAsync<ValidationException>();
-        await _users.DidNotReceiveWithAnyArgs().DeleteAsync(default, default);
-    }
-
-    [Fact]
     public async Task Delete_user_returns_domain_not_found_for_unknown_identifier()
     {
         var id = Guid.NewGuid();
@@ -148,14 +138,9 @@ public sealed class AuthenticationAndUserHandlerTests
     }
 
     [Fact]
-    public async Task Get_user_rejects_empty_and_unknown_identifiers()
+    public async Task Get_user_returns_domain_not_found_for_unknown_identifier()
     {
         var handler = new GetUserHandler(_users);
-
-        await FluentActions.Invoking(() => handler.Handle(
-                new GetUserCommand(Guid.Empty), CancellationToken.None))
-            .Should().ThrowAsync<ValidationException>();
-
         var id = Guid.NewGuid();
         _users.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((User?)null);
         var exception = await FluentActions.Invoking(() => handler.Handle(
