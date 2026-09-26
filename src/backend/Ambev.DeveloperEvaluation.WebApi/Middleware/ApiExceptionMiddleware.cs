@@ -4,6 +4,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales;
+using System.Diagnostics;
 
 namespace Ambev.DeveloperEvaluation.WebApi.Middleware;
 
@@ -21,6 +22,9 @@ public sealed class ApiExceptionMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (Activity.Current is { } activity)
+            context.TraceIdentifier = activity.TraceId.ToString();
+
         try
         {
             await _next(context);

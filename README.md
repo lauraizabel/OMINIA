@@ -100,7 +100,7 @@ Copy-Item .env.example .env
 docker compose up --detach --build --wait --wait-timeout 240
 ```
 
-Open the frontend at `http://localhost:4200`. The API and Swagger are available at `http://localhost:5119` and `http://localhost:5119/swagger`.
+Open the frontend at `http://localhost:4200`. The API and Swagger are available at `http://localhost:5119` and `http://localhost:5119/swagger`. Jaeger is available at `http://localhost:16686`; see the [distributed tracing guide](/.doc/observability.md) for configuration, privacy rules, and a trace walkthrough.
 
 ## Frontend development and tests
 

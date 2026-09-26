@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Ambev.DeveloperEvaluation.Domain.Events;
 using Ambev.DeveloperEvaluation.ORM.Outbox;
 using FluentAssertions;
@@ -78,6 +79,47 @@ public sealed class OutboxMessageTests
         message.LastError.Should().BeNull();
         message.AttemptCount.Should().Be(0);
         message.NextAttemptAt.Should().Be(Now.AddMinutes(2));
+    }
+
+    [Fact]
+    public void Delivery_span_preserves_a_valid_originating_trace_without_payload_data()
+    {
+        const string traceId = "0123456789abcdef0123456789abcdef";
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OutboxTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        };
+        ActivitySource.AddActivityListener(listener);
+        var message = OutboxMessage.From(
+            new SaleCreatedEvent(Guid.NewGuid(), 1, Now),
+            0,
+            traceId,
+            Now);
+
+        using var activity = OutboxTelemetry.StartDelivery(message);
+
+        activity.Should().NotBeNull();
+        activity!.TraceId.ToString().Should().Be(traceId);
+        activity.Kind.Should().Be(ActivityKind.Consumer);
+        activity.Tags.Should().Contain(pair => pair.Key == "messaging.message.id");
+        activity.Tags.Should().NotContain(pair => pair.Value != null && pair.Value.Contains(message.Payload));
+    }
+
+    [Fact]
+    public void Delivery_span_starts_a_new_trace_when_legacy_correlation_is_not_a_trace_id()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OutboxTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        using var activity = OutboxTelemetry.StartDelivery(Message());
+
+        activity.Should().NotBeNull();
+        activity!.TraceId.Should().NotBe(default);
     }
 
     private static OutboxMessage Message() => OutboxMessage.From(

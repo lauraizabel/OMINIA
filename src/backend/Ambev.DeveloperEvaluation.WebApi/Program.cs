@@ -6,6 +6,7 @@ using Ambev.DeveloperEvaluation.Common.Validation;
 using Ambev.DeveloperEvaluation.IoC;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.WebApi.Configuration;
+using Ambev.DeveloperEvaluation.WebApi.Observability;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -22,6 +23,7 @@ public class Program
 
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
             builder.AddDefaultLogging();
+            builder.AddApplicationTelemetry();
 
             builder.Services.AddApiProtection();
             builder.Services.AddEndpointsApiExplorer();

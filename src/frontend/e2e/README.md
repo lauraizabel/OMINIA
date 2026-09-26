@@ -18,6 +18,7 @@ This suite runs the Angular application against a real API and PostgreSQL databa
 | E10      | Interrupt the create response after persistence, avoid an automatic retry, and find one sale by number.                                              |
 | E11      | Check a mobile viewport, labels, invalid-field focus, keyboard activation, confirmation focus, and serious axe violations.                           |
 | E12      | Protect a direct route, restore it from the `HttpOnly` refresh cookie after reload, revoke it on logout, and remain signed out after another reload. |
+| E13      | Export sanitized browser spans, propagate a valid W3C trace context to the API, and exclude credentials and authorization headers.                 |
 
 ## Prerequisites
 

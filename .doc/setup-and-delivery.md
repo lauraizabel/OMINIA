@@ -67,7 +67,7 @@ docker compose up --detach --build --wait --wait-timeout 240
 docker compose ps
 ```
 
-Compose starts PostgreSQL and MongoDB, runs the EF Core migration bundle once, waits for the API readiness probe, and then starts the Nginx-hosted Angular application. MongoDB audit availability is reported by the diagnostic health endpoint but does not block sales readiness; events remain durable in PostgreSQL while it is unavailable.
+Compose starts PostgreSQL, MongoDB, and Jaeger, runs the EF Core migration bundle once, waits for the API readiness probe, and then starts the Nginx-hosted Angular application. MongoDB audit availability is reported by the diagnostic health endpoint but does not block sales readiness; events remain durable in PostgreSQL while it is unavailable. OpenTelemetry traces are exported to Jaeger as described in the [observability guide](observability.md).
 
 | Resource                 | URL                                  |
 | ------------------------ | ------------------------------------ |
@@ -78,6 +78,7 @@ Compose starts PostgreSQL and MongoDB, runs the EF Core migration bundle once, w
 | API readiness            | `http://localhost:5119/health/ready` |
 | PostgreSQL from the host | `localhost:5434`                     |
 | MongoDB from the host    | `localhost:27018`                    |
+| Jaeger trace UI          | `http://localhost:16686`             |
 
 Sign in through the frontend with `DEVELOPMENT_ADMIN_EMAIL` and `DEVELOPMENT_ADMIN_PASSWORD` from the local `.env` file.
 
@@ -85,7 +86,7 @@ Inspect logs when startup fails:
 
 ```powershell
 docker compose ps --all
-docker compose logs migrations webapi frontend database audit-database
+docker compose logs migrations webapi frontend database audit-database telemetry
 ```
 
 Stop the stack while retaining database data:
@@ -311,8 +312,8 @@ The [GitHub Actions workflow](../.github/workflows/ci.yml) runs on every pull re
 | Backend tests          | Restore, Release build, unit/integration/functional tests, TRX, and scoped Cobertura                  |
 | Frontend checks        | npm lockfile restore, lint, strict typecheck, unit tests, 90% coverage gate, and production build     |
 | Code coverage          | Publish separate backend/frontend reports and block below 90% lines or branches                       |
-| Isolated browser suite | Run 13 Playwright scenarios against real Angular, API, and PostgreSQL processes                       |
-| Container stack smoke  | Build the production-like stack, wait for health, and verify frontend, API, proxy, and authentication |
+| Isolated browser suite | Run 14 Playwright scenarios against real Angular, API, and PostgreSQL processes                                      |
+| Container stack smoke  | Build the production-like stack and verify health, auth, OTLP proxying, and a queryable Jaeger trace                  |
 
 ### Recorded delivery evidence
 
@@ -335,6 +336,8 @@ The T15 outbox extension was verified locally with **164 unit, 100 functional, a
 
 The T18 secure-session extension was verified locally with **165 unit, 125 functional, 40 integration, 84 Angular, and 13 Playwright tests**. Coverage remained above the independent gates at **94.6% backend lines / 90.2% backend branches** and **94.75% frontend lines / 93.29% frontend branches**. The production frontend image returned the configured CSP, HSTS, framing, MIME, referrer, permissions, COOP, and CORP headers. The browser suite proved login, cookie-backed reload restoration, refresh rotation, logout revocation, and a subsequent anonymous reload against disposable PostgreSQL and API containers. Integration coverage also verifies bounded retention cleanup without removing a family before its replay-detection window closes.
 
+The T16 tracing extension was verified locally with **167 unit, 130 functional, 40 integration, 89 Angular, and 14 Playwright tests**. Coverage remained above the independent gates at **94.5% backend lines / 90.1% backend branches** and **94.59% frontend lines / 92.35% frontend branches**. A clean Compose stack accepted OTLP through Nginx and exposed browser/API spans under one W3C trace in Jaeger 2.21; the stable v3 query API returned the stored trace summaries.
+
 Reports are retained as workflow artifacts for seven days. The pipeline measures backend and frontend separately and blocks either application below 90% line or branch coverage. Backend measurement excludes only EF migrations, generated code, the declarative host bootstrap, and the design-time context factory through [the committed run settings](../.config/coverage.runsettings). Frontend measurement includes application TypeScript and Angular templates except declarative route/bootstrap configuration and test files. The percentage complements the scenario matrix; it does not replace behavior-focused assertions. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
 
 ## Design decisions
@@ -349,6 +352,7 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 - **Object mapping:** AutoMapper 13.0.1 was removed because of high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Riok.Mapperly 4.3.1 now generates strict, feature-local mappings at compile time, so no runtime mapper registration or reflection is required.
 - **Security:** sales require explicit roles, login and session endpoints are rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
 - **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs. They are stored transactionally with the sale and delivered at least once to an idempotent MongoDB audit projection.
+- **Observability:** W3C trace context links sanitized browser request spans, ASP.NET Core, Npgsql, outbound HTTP, and later outbox delivery. Runtime switches keep telemetry disabled by default; Compose routes OTLP through same-origin Nginx to local Jaeger.
 - **Frontend session:** the 15-minute JWT remains in memory. The browser keeps only an opaque rotating refresh token in an `HttpOnly`, `SameSite=Strict` cookie, so JavaScript cannot read it. PostgreSQL stores its SHA-256 hash, rotation is serialized, replay outside the short concurrency grace period revokes the complete token family, and logout revokes that family before clearing the cookie. A bounded background cleanup retains every family until its absolute expiration plus the configured investigation period, then deletes the oldest records in indexed batches.
 - **Infrastructure scope:** PostgreSQL remains the source of truth. MongoDB stores the queryable audit projection; Redis and a message broker are not required for this single-service delivery.
 
@@ -358,7 +362,7 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 - Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
 - The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
-- The repository does not include cloud infrastructure, deployment automation, a message broker, or production observability exporters.
+- The repository does not include cloud infrastructure, deployment automation, or a message broker. Its Jaeger topology provides reproducible local trace evidence; a production environment still needs an authenticated TLS collector, sampling, retention, and access policy.
 - Swagger is enabled only in Development.
 - Docker Desktop on Windows can fail to resolve paths containing decomposed Unicode characters. Use an ASCII-only checkout path such as `D:\work\ambev-evaluation`; the isolated E2E runner handles the current workspace with a temporary drive mapping.
 

@@ -3,5 +3,13 @@
     "target": "http://localhost:5119",
     "secure": false,
     "changeOrigin": true
+  },
+  "/otel": {
+    "target": "http://localhost:4318",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/otel": ""
+    }
   }
 }

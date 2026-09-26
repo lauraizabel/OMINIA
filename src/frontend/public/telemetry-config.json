@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "serviceName": "ambev-sales-portal",
+  "endpoint": "/otel/v1/traces"
+}

@@ -296,19 +296,19 @@ public sealed class UserAndAuthControllerTests
     }
 
     [Fact]
-    public void Correlation_provider_prefers_http_then_activity_and_keeps_a_stable_fallback()
+    public void Correlation_provider_prefers_activity_then_http_and_keeps_a_stable_fallback()
     {
         var context = new DefaultHttpContext { TraceIdentifier = "http-correlation" };
         var accessor = new HttpContextAccessor { HttpContext = context };
         var provider = new HttpCorrelationIdProvider(accessor);
-        Assert.Equal("http-correlation", provider.CorrelationId);
 
-        accessor.HttpContext = null;
         using (var activity = new Activity("coverage").Start())
         {
             Assert.Equal(activity.TraceId.ToString(), provider.CorrelationId);
         }
 
+        Assert.Equal("http-correlation", provider.CorrelationId);
+        accessor.HttpContext = null;
         var fallback = provider.CorrelationId;
         Assert.NotEmpty(fallback);
         Assert.Equal(fallback, provider.CorrelationId);
