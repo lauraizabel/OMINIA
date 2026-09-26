@@ -121,6 +121,8 @@ npm run test:ci -- --coverage --coverage-reporters=text-summary
 npm run build
 ```
 
+The frontend test command enforces at least 90% line and branch coverage. Backend coverage uses `.config/coverage.runsettings`; CI merges the three .NET test reports and applies the same independent 90% line and branch gate.
+
 ## End-to-end tests
 
 The Playwright suite starts disposable API and PostgreSQL containers, generates credentials in memory, runs the Angular application, and removes its containers and volumes afterward. Docker must be running.

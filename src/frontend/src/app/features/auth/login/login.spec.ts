@@ -85,4 +85,27 @@ describe('Login', () => {
     });
     expect(navigateByUrl).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [429, null, 'Too many sign-in attempts'],
+    [400, { detail: 'The account request is invalid.' }, 'account request is invalid'],
+    [500, null, 'We could not sign you in'],
+  ])('maps HTTP status %s to an actionable message', (status, error, message) => {
+    component.form.setValue({ email: 'manager@example.com', password: 'secret' });
+    component.submit();
+    http.expectOne('/api/auth').flush(error, { status, statusText: 'Failure' });
+    expect(component.errorMessage()).toContain(message);
+  });
+
+  it('handles a network failure and toggles password visibility', () => {
+    component.form.setValue({ email: 'manager@example.com', password: 'secret' });
+    component.submit();
+    http.expectOne('/api/auth').error(new ProgressEvent('network'));
+    expect(component.errorMessage()).toContain('sales service is unavailable');
+    expect(component.passwordVisible()).toBe(false);
+    component.togglePasswordVisibility();
+    expect(component.passwordVisible()).toBe(true);
+    component.togglePasswordVisibility();
+    expect(component.passwordVisible()).toBe(false);
+  });
 });

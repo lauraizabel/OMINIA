@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
+import { ToastService } from '../../../shared/ui/toast/toast.service';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { SalesApiService } from '../data-access/sales-api.service';
 import {
@@ -99,6 +100,104 @@ describe('SaleEditor create mode', () => {
     component.submit();
     expect(create).toHaveBeenCalledOnce();
   });
+
+  it('reports validation causes, protects item bounds, and tracks pending changes', () => {
+    expect(component.hasPendingChanges()).toBe(true);
+    component.form.markAsPristine();
+    expect(component.hasPendingChanges()).toBe(false);
+
+    const saleNumber = component.form.controls.saleNumber;
+    saleNumber.markAsTouched();
+    saleNumber.setValue('');
+    expect(component.errorFor(saleNumber, 'saleNumber')).toBe('This field is required.');
+    saleNumber.setValue(' '.repeat(2));
+    expect(component.errorFor(saleNumber, 'saleNumber')).toBe(
+      'This field cannot contain only spaces.',
+    );
+    saleNumber.setValue('x'.repeat(51));
+    expect(component.errorFor(saleNumber, 'saleNumber')).toBe('Maximum length is 50.');
+
+    const item = component.items.at(0);
+    item.controls.quantity.markAsTouched();
+    item.controls.quantity.setValue(0);
+    expect(component.errorFor(item.controls.quantity, 'items[0].quantity')).toBe(
+      'Minimum value is 1.',
+    );
+    item.controls.quantity.setValue(21);
+    expect(component.errorFor(item.controls.quantity, 'items[0].quantity')).toBe(
+      'Maximum value is 20.',
+    );
+    item.controls.unitPrice.markAsTouched();
+    item.controls.unitPrice.setValue(1.234);
+    expect(component.errorFor(item.controls.unitPrice, 'items[0].unitPrice')).toContain(
+      'positive amount',
+    );
+    item.controls.productExternalId.markAsTouched();
+    item.controls.productExternalId.setValue('bad\u0001id');
+    expect(component.errorFor(item.controls.productExternalId, 'items[0].product.externalId')).toBe(
+      'Control characters are not allowed.',
+    );
+
+    component.addItem();
+    component.removeItem(1);
+    component.removeItem(0);
+    expect(component.items.length).toBe(1);
+  });
+
+  it('maps server field errors, clears them on submit, and returns from create mode', () => {
+    const router = TestBed.inject(Router);
+    const navigation = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    component.serverFields.set({ SaleNumber: 'Already used.' });
+    expect(component.errorFor(component.form.controls.saleNumber, 'saleNumber')).toBe(
+      'Already used.',
+    );
+    component.cancel();
+    expect(navigation).toHaveBeenCalledWith('/sales');
+
+    component.submit();
+    expect(component.submitError()).toContain('highlighted fields');
+    expect(component.serverFields()).toEqual({});
+  });
+
+  it('navigates to the new resource and marks the form saved after success', () => {
+    const router = TestBed.inject(Router);
+    const navigation = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const toast = TestBed.inject(ToastService);
+    const success = vi.spyOn(toast, 'success');
+    fillValidForm(component);
+    component.submit();
+    createResult.next(saleResource());
+
+    expect(success).toHaveBeenCalledWith('Sale created successfully.');
+    expect(navigation).toHaveBeenCalledWith(
+      ['/sales', 'sale-id'],
+      expect.objectContaining({ queryParams: { returnUrl: '/sales' } }),
+    );
+    expect(component.hasPendingChanges()).toBe(false);
+  });
+
+  it('presents API field errors without losing the draft', () => {
+    create.mockReturnValueOnce(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            statusText: 'Bad Request',
+            error: {
+              detail: 'Correct the fields.',
+              errors: [{ field: 'Customer.Name', code: 'Invalid', message: 'Invalid customer.' }],
+            },
+          }),
+      ),
+    );
+    fillValidForm(component);
+    component.submit();
+    expect(component.submitError()).toBe('Correct the fields.');
+    expect(component.errorFor(component.form.controls.customerName, 'customer.name')).toBe(
+      'Invalid customer.',
+    );
+    expect(component.saving()).toBe(false);
+  });
 });
 
 describe('SaleEditor edit mode', () => {
@@ -142,7 +241,89 @@ describe('SaleEditor edit mode', () => {
     expect(component.form.controls.customerName.value).toBe('Locally edited customer');
     expect(update.mock.calls[0][2]).toBe('"v7"');
   });
+
+  it('loads active and cancelled items, navigates back, and reloads only with confirmation', async () => {
+    const resource = saleResource();
+    const cancelled = { ...resource.sale.items[0], id: 'cancelled-id', isCancelled: true };
+    resource.sale.items.push(cancelled);
+    const get = vi.fn(() => of(resource));
+    const { component, router } = await createEditComponent({ get, update: vi.fn() });
+
+    expect(component.items.length).toBe(1);
+    expect(component.cancelledItems()).toHaveLength(1);
+    expect(component.saleNumber()).toBe('SALE-1');
+    expect(component.form.pristine).toBe(true);
+    component.cancel();
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['/sales', 'sale-id'],
+      expect.objectContaining({ queryParams: { returnUrl: '/sales?_page=2' } }),
+    );
+
+    component.form.markAsDirty();
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    component.reloadCurrent();
+    expect(get).toHaveBeenCalledTimes(1);
+    component.reloadCurrent();
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows load failures and retries a clean edit form without confirmation', async () => {
+    const get = vi
+      .fn()
+      .mockReturnValueOnce(
+        throwError(() => new HttpErrorResponse({ status: 503, statusText: 'Unavailable' })),
+      )
+      .mockReturnValueOnce(of(saleResource()));
+    const { component } = await createEditComponent({ get, update: vi.fn() });
+    expect(component.loadError()).toContain('required service');
+    component.reloadCurrent();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(component.loading()).toBe(false);
+  });
 });
+
+function fillValidForm(component: SaleEditor): void {
+  component.form.patchValue({
+    saleNumber: 'SALE-1',
+    saleDate: '2026-09-24T10:00',
+    customerExternalId: 'C-1',
+    customerName: 'Customer',
+    branchExternalId: 'B-1',
+    branchName: 'Branch',
+  });
+  component.items.at(0).patchValue({
+    productExternalId: 'P-1',
+    productName: 'Product',
+    quantity: 4,
+    unitPrice: 10,
+  });
+}
+
+async function createEditComponent(api: {
+  get: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+}): Promise<{ component: SaleEditor; router: { navigate: ReturnType<typeof vi.fn> } }> {
+  const router = { navigate: vi.fn().mockResolvedValue(true), navigateByUrl: vi.fn() };
+  await TestBed.configureTestingModule({
+    imports: [SaleEditor],
+    providers: [
+      { provide: Router, useValue: router },
+      { provide: SalesApiService, useValue: api },
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          snapshot: {
+            paramMap: { get: () => 'sale-id' },
+            queryParamMap: { get: () => '/sales?_page=2' },
+          },
+        },
+      },
+    ],
+  }).compileComponents();
+  const fixture = TestBed.createComponent(SaleEditor);
+  fixture.detectChanges();
+  return { component: fixture.componentInstance, router };
+}
 
 function saleResource(): SaleResource {
   const sale: Sale = {

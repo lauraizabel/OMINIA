@@ -56,11 +56,78 @@ public sealed class SaleListRequestParserTests
     [InlineData("?_minTotalAmount=20&_maxTotalAmount=10", SaleListErrorCodes.InvalidRange)]
     [InlineData("?_minSaleDate=2026-09-21T10%3A00%3A00Z&_maxSaleDate=2026-09-20T10%3A00%3A00Z", SaleListErrorCodes.InvalidRange)]
     [InlineData("?_minTotalAmount=1&_minTotalAmount=2", SaleListErrorCodes.DuplicateParameter)]
+    [InlineData("?_order=%20%20", SaleListErrorCodes.InvalidOrder)]
+    [InlineData("?_order=saleDate%20sideways", SaleListErrorCodes.InvalidOrder)]
+    [InlineData("?_order=saleDate,saleDate", SaleListErrorCodes.InvalidOrder)]
+    [InlineData("?_order=saleDate%20asc%20extra", SaleListErrorCodes.InvalidOrder)]
+    [InlineData("?saleNumber=SALE*INNER", SaleListErrorCodes.InvalidFilter)]
+    [InlineData("?saleNumber=%20", SaleListErrorCodes.InvalidFilter)]
+    [InlineData("?saleNumber=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", SaleListErrorCodes.InvalidFilter)]
+    [InlineData("?customerExternalId=%20", SaleListErrorCodes.InvalidFilter)]
+    [InlineData("?isCancelled=maybe", SaleListErrorCodes.InvalidFilter)]
+    [InlineData("?_minTotalAmount=-1", SaleListErrorCodes.InvalidMoney)]
+    [InlineData("?_maxTotalAmount=2000000001", SaleListErrorCodes.InvalidMoney)]
+    [InlineData("?_maxTotalAmount=not-money", SaleListErrorCodes.InvalidMoney)]
+    [InlineData("?_minSaleDate=2026-99-99T10%3A00%3A00Z", SaleListErrorCodes.InvalidDate)]
     public void Invalid_query_returns_centralized_validation_code(string query, string expectedCode)
     {
         var exception = Assert.Throws<ValidationException>(() => Parse(query));
 
         Assert.Equal(expectedCode, Assert.Single(exception.Errors).ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("?saleNumber=SALE-1", "SALE-1", false, false)]
+    [InlineData("?saleNumber=*SALE-1", "SALE-1", true, false)]
+    [InlineData("?saleNumber=SALE-1*", "SALE-1", false, true)]
+    public void Sale_number_wildcards_are_normalized(
+        string query,
+        string value,
+        bool matchStart,
+        bool matchEnd)
+    {
+        var filter = Parse(query).Criteria.SaleNumber;
+        Assert.Equal(new SaleNumberFilter(value, matchStart, matchEnd), filter);
+    }
+
+    [Theory]
+    [InlineData("saleDate asc", SaleOrderField.SaleDate, SortDirection.Ascending)]
+    [InlineData("saleNumber DESC", SaleOrderField.SaleNumber, SortDirection.Descending)]
+    [InlineData("totalAmount", SaleOrderField.TotalAmount, SortDirection.Ascending)]
+    [InlineData("id desc", SaleOrderField.Id, SortDirection.Descending)]
+    public void Supported_order_terms_accept_explicit_and_implicit_directions(
+        string raw,
+        SaleOrderField field,
+        SortDirection direction)
+    {
+        var order = Parse("?_order=" + Uri.EscapeDataString(raw)).Criteria.Order.First();
+        Assert.Equal(new SaleOrder(field, direction), order);
+    }
+
+    [Fact]
+    public void Null_query_is_rejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => SaleListRequestParser.Parse(null!));
+    }
+
+    [Fact]
+    public void Repeated_filters_enforce_the_twenty_value_limit()
+    {
+        var repeated = string.Join('&', Enumerable.Range(1, 21).Select(i => $"customerExternalId=C-{i}"));
+        var exception = Assert.Throws<ValidationException>(() => Parse("?" + repeated));
+        Assert.Equal(SaleListErrorCodes.TooManyValues, Assert.Single(exception.Errors).ErrorCode);
+    }
+
+    [Fact]
+    public void Filter_values_enforce_domain_length_limits_after_wildcard_parsing()
+    {
+        var saleNumber = Assert.Throws<ValidationException>(() =>
+            Parse("?saleNumber=" + new string('A', 51)));
+        Assert.Equal(SaleListErrorCodes.InvalidFilter, Assert.Single(saleNumber.Errors).ErrorCode);
+
+        var externalId = Assert.Throws<ValidationException>(() =>
+            Parse("?customerExternalId=" + new string('A', 101)));
+        Assert.Equal(SaleListErrorCodes.InvalidFilter, Assert.Single(externalId.Errors).ErrorCode);
     }
 
     private static ListSalesQuery Parse(string queryString)

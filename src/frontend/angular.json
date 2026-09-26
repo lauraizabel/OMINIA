@@ -73,7 +73,19 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "coverageInclude": ["src/app/**/*.ts", "src/app/**/*.html"],
+            "coverageExclude": [
+              "src/app/**/*.spec.ts",
+              "src/app/app.config.ts",
+              "src/app/app.routes.ts"
+            ],
+            "coverageThresholds": {
+              "lines": 90,
+              "branches": 90
+            }
+          }
         },
         "lint": {
           "builder": "@angular-eslint/builder:lint",

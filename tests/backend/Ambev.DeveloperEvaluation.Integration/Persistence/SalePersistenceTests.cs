@@ -4,6 +4,7 @@ using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.Domain.ValueObjects;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.ORM.Repositories;
+using Ambev.DeveloperEvaluation.ORM.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -125,6 +126,30 @@ public sealed class SalePersistenceTests
         var duplicateRepository = new UserRepository(duplicateContext);
         await Assert.ThrowsAsync<DbUpdateException>(() =>
             duplicateRepository.CreateAsync(CreateUser("ADMIN@example.com")));
+    }
+
+    [Fact]
+    public async Task UserRepository_ShouldReadDeleteAndValidateOnlyActiveAuthenticatedUsers()
+    {
+        await ResetDatabaseAsync();
+        var active = CreateUser("active@example.com");
+        var inactive = CreateUser("inactive@example.com");
+        inactive.Status = UserStatus.Inactive;
+
+        await using var context = CreateContext();
+        var repository = new UserRepository(context);
+        await repository.CreateAsync(active);
+        await repository.CreateAsync(inactive);
+
+        Assert.Equal(active.Id, (await repository.GetByIdAsync(active.Id))?.Id);
+        var status = new AuthenticatedUserStatusValidator(context);
+        Assert.True(await status.IsActiveAsync(active.Id.ToString(), CancellationToken.None));
+        Assert.False(await status.IsActiveAsync(inactive.Id.ToString(), CancellationToken.None));
+        Assert.False(await status.IsActiveAsync("not-a-guid", CancellationToken.None));
+
+        Assert.True(await repository.DeleteAsync(active.Id));
+        Assert.Null(await repository.GetByIdAsync(active.Id));
+        Assert.False(await repository.DeleteAsync(Guid.NewGuid()));
     }
 
     [Fact]
