@@ -3,7 +3,6 @@ using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Unit.Domain;
-using AutoMapper;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -16,7 +15,6 @@ namespace Ambev.DeveloperEvaluation.Unit.Application;
 public class CreateUserHandlerTests
 {
     private readonly IUserRepository _userRepository;
-    private readonly IMapper _mapper;
     private readonly IPasswordHasher _passwordHasher;
     private readonly CreateUserHandler _handler;
 
@@ -27,9 +25,8 @@ public class CreateUserHandlerTests
     public CreateUserHandlerTests()
     {
         _userRepository = Substitute.For<IUserRepository>();
-        _mapper = Substitute.For<IMapper>();
         _passwordHasher = Substitute.For<IPasswordHasher>();
-        _handler = new CreateUserHandler(_userRepository, _mapper, _passwordHasher);
+        _handler = new CreateUserHandler(_userRepository, _passwordHasher);
     }
 
     /// <summary>
@@ -50,15 +47,6 @@ public class CreateUserHandlerTests
             Status = command.Status,
             Role = command.Role
         };
-
-        var result = new CreateUserResult
-        {
-            Id = user.Id,
-        };
-
-
-        _mapper.Map<User>(command).Returns(user);
-        _mapper.Map<CreateUserResult>(user).Returns(result);
 
         _userRepository.CreateAsync(Arg.Any<User>(), Arg.Any<CancellationToken>())
             .Returns(user);
@@ -110,7 +98,6 @@ public class CreateUserHandlerTests
             Role = command.Role
         };
 
-        _mapper.Map<User>(command).Returns(user);
         _userRepository.CreateAsync(Arg.Any<User>(), Arg.Any<CancellationToken>())
             .Returns(user);
         _passwordHasher.HashPassword(originalPassword).Returns(hashedPassword);
@@ -126,38 +113,29 @@ public class CreateUserHandlerTests
     }
 
     /// <summary>
-    /// Tests that the mapper is called with the correct command.
+    /// Tests that the command is mapped to the persisted entity.
     /// </summary>
-    [Fact(DisplayName = "Given valid command When handling Then maps command to user entity")]
-    public async Task Handle_ValidRequest_MapsCommandToUser()
+    [Fact(DisplayName = "Given valid command When handling Then persists all mapped fields")]
+    public async Task Handle_ValidRequest_PersistsMappedFields()
     {
         // Given
         var command = CreateUserHandlerTestData.GenerateValidCommand();
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Username = command.Username,
-            Password = command.Password,
-            Email = command.Email,
-            Phone = command.Phone,
-            Status = command.Status,
-            Role = command.Role
-        };
-
-        _mapper.Map<User>(command).Returns(user);
         _userRepository.CreateAsync(Arg.Any<User>(), Arg.Any<CancellationToken>())
-            .Returns(user);
+            .Returns(call => call.Arg<User>());
         _passwordHasher.HashPassword(Arg.Any<string>()).Returns("hashedPassword");
 
         // When
         await _handler.Handle(command, CancellationToken.None);
 
         // Then
-        _mapper.Received(1).Map<User>(Arg.Is<CreateUserCommand>(c =>
-            c.Username == command.Username &&
-            c.Email == command.Email &&
-            c.Phone == command.Phone &&
-            c.Status == command.Status &&
-            c.Role == command.Role));
+        await _userRepository.Received(1).CreateAsync(
+            Arg.Is<User>(user =>
+                user.Username == command.Username &&
+                user.Email == command.Email &&
+                user.Phone == command.Phone &&
+                user.Status == command.Status &&
+                user.Role == command.Role &&
+                user.Password == "hashedPassword"),
+            Arg.Any<CancellationToken>());
     }
 }

@@ -318,6 +318,7 @@ Reports are retained as workflow artifacts for seven days. Raising backend and f
 - **Concurrency:** strong ETags and `If-Match` prevent silent last-write-wins updates.
 - **Deletion:** delete is a tombstone operation; cancellation is a separate business transition.
 - **Query performance:** list queries project in PostgreSQL, use stable allowlisted ordering, and avoid loading item collections for pagination.
+- **Object mapping:** AutoMapper 13.0.1 was removed because of high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Riok.Mapperly 4.3.1 now generates strict, feature-local mappings at compile time, so no runtime mapper registration or reflection is required.
 - **Security:** sales require explicit roles, login is rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
 - **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs and are logged only after a successful commit.
 - **Frontend session:** the JWT remains in memory to avoid persistent browser storage of bearer credentials.
@@ -331,7 +332,6 @@ Reports are retained as workflow artifacts for seven days. Raising backend and f
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
 - The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
 - The current combined coverage is below the planned 90% per-application quality gate, although critical rules and end-to-end paths are covered.
-- AutoMapper 13.0.1 has the advisory recorded in [dependency-inventory.md](dependency-inventory.md). Replacing inherited mappings with explicit mappings is preferred over adopting the later commercial-license line without review.
 - The repository does not include cloud infrastructure, deployment automation, a message broker, or production observability exporters.
 - Swagger is enabled only in Development.
 - Docker Desktop on Windows can fail to resolve paths containing decomposed Unicode characters. Use an ASCII-only checkout path such as `D:\work\ambev-evaluation`; the isolated E2E runner handles the current workspace with a temporary drive mapping.
