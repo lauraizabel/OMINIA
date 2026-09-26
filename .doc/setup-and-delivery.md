@@ -14,7 +14,7 @@ The repository contains a complete sales vertical slice:
 - server-side discounts and totals using decimal arithmetic;
 - JWT authentication with role-based authorization for `Manager` and `Admin` users;
 - an Angular application for authentication and the complete sales workflow;
-- structured domain-event logging after successful commits;
+- transactional event outbox with idempotent MongoDB audit storage;
 - unit, integration, functional, Angular, and Playwright browser tests;
 - a containerized stack and GitHub Actions CI pipeline with coverage reports.
 
@@ -67,7 +67,7 @@ docker compose up --detach --build --wait --wait-timeout 240
 docker compose ps
 ```
 
-Compose starts PostgreSQL, runs the EF Core migration bundle once, waits for the API readiness probe, and then starts the Nginx-hosted Angular application.
+Compose starts PostgreSQL and MongoDB, runs the EF Core migration bundle once, waits for the API readiness probe, and then starts the Nginx-hosted Angular application. MongoDB audit availability is reported by the diagnostic health endpoint but does not block sales readiness; events remain durable in PostgreSQL while it is unavailable.
 
 | Resource                 | URL                                  |
 | ------------------------ | ------------------------------------ |
@@ -77,6 +77,7 @@ Compose starts PostgreSQL, runs the EF Core migration bundle once, waits for the
 | API liveness             | `http://localhost:5119/health/live`  |
 | API readiness            | `http://localhost:5119/health/ready` |
 | PostgreSQL from the host | `localhost:5434`                     |
+| MongoDB from the host    | `localhost:27018`                    |
 
 Sign in through the frontend with `DEVELOPMENT_ADMIN_EMAIL` and `DEVELOPMENT_ADMIN_PASSWORD` from the local `.env` file.
 
@@ -84,7 +85,7 @@ Inspect logs when startup fails:
 
 ```powershell
 docker compose ps --all
-docker compose logs migrations webapi frontend database
+docker compose logs migrations webapi frontend database audit-database
 ```
 
 Stop the stack while retaining database data:
@@ -101,10 +102,10 @@ docker compose down --volumes --remove-orphans
 
 ## Local development and Rider
 
-Create the same `.env` file described above, then start PostgreSQL only:
+Create the same `.env` file described above, then start both persistence services:
 
 ```powershell
-docker compose up --detach database
+docker compose up --detach database audit-database
 ```
 
 Restore the .NET tools and configure secrets outside committed files:
@@ -121,6 +122,10 @@ dotnet user-secrets set "DevelopmentAdmin:Enabled" "true" `
 dotnet user-secrets set "DevelopmentAdmin:Email" "admin@example.test" `
   --project src/backend/Ambev.DeveloperEvaluation.WebApi
 dotnet user-secrets set "DevelopmentAdmin:Password" "<strong-local-admin-password>" `
+  --project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet user-secrets set "MongoAudit:Enabled" "true" `
+  --project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet user-secrets set "MongoAudit:ConnectionString" "mongodb://localhost:27018" `
   --project src/backend/Ambev.DeveloperEvaluation.WebApi
 ```
 
@@ -158,6 +163,8 @@ Open `http://localhost:4200`. The Angular development proxy forwards `/api` to `
 | `DevelopmentAdmin__Enabled`            | Enables the idempotent development seed | local configuration only                                       |
 | `DevelopmentAdmin__Email`              | Seeded development account email        | local configuration only                                       |
 | `DevelopmentAdmin__Password`           | Seeded development account password     | local configuration only                                       |
+| `MongoAudit__Enabled`                  | Enables asynchronous audit delivery     | Compose or environment/User Secrets override                   |
+| `MongoAudit__ConnectionString`         | MongoDB audit connection                 | Compose or environment/User Secrets; secret manager in production |
 
 The development administrator is never seeded outside the Development environment. Production must inject all secrets through its secret manager and configure explicit CORS origins.
 
@@ -172,20 +179,23 @@ flowchart LR
     Mediator --> Domain[Sale aggregate and domain rules]
     Mediator --> Repository[Repository and Unit of Work]
     Repository --> EF[EF Core]
-    EF --> PostgreSQL[(PostgreSQL)]
-    Repository -->|after commit| Events[Structured domain-event logs]
+    EF --> PostgreSQL[(PostgreSQL + transactional outbox)]
+    PostgreSQL --> Worker[Leased outbox worker]
+    Worker --> MongoDB[(MongoDB audit history)]
 ```
 
 | Layer       | Responsibility                                                                                                        |
 | ----------- | --------------------------------------------------------------------------------------------------------------------- |
 | Domain      | Sale invariants, discounts, totals, cancellation, versioning, and domain events                                       |
 | Application | Commands, queries, validators, handlers, ports, and result models                                                     |
-| ORM         | EF Core mappings, repositories, migrations, transaction boundary, and post-commit event publication                   |
+| ORM         | EF Core mappings, repositories, migrations, transactional outbox, leased worker, retries, and MongoDB audit persistence |
 | IoC         | Dependency registration, correlation IDs, and infrastructure bindings                                                 |
 | WebApi      | HTTP contracts, authentication, authorization, ETags, error mapping, CORS, rate limiting, and health probes           |
 | Frontend    | Authentication, sales list/detail/editor flows, URL-backed filters, concurrency recovery, and accessible interactions |
 
-Writes are committed before domain events are written to structured logs. Publication is deliberately best effort; the limitations section explains the durability tradeoff.
+Sale changes and their outbox messages are committed atomically in PostgreSQL. A background worker claims the earliest event per aggregate with `FOR UPDATE SKIP LOCKED`, writes an idempotent audit document to MongoDB, and then marks the outbox row as processed. Failures use bounded exponential backoff and move to dead letter after the configured attempt limit. This provides at-least-once delivery without presenting MongoDB as the source of sale totals.
+
+Administrators can inspect backlog and dead-letter metadata with `GET /api/operations/outbox` and replay a dead-letter event with `POST /api/operations/outbox/{eventId}/replay`. Event payloads are intentionally omitted from the operational response.
 
 ## Sales behavior at a glance
 
@@ -238,13 +248,13 @@ This sequence demonstrates the business rules and the main engineering decisions
 7. Cancel an item and confirm that its history remains visible while its effective amount becomes zero. Cancelling the final active item also cancels the sale.
 8. Return to the list and exercise sale-number, date, status, ordering, and page-size controls. Refresh the page to show that list state is encoded in the URL.
 9. Delete a disposable sale and confirm it disappears from public reads without removing its database history.
-10. Open `/health/live`, `/health/ready`, and Swagger. Show the structured event entries in `docker compose logs webapi`.
+10. Open `/health/live`, `/health/ready`, and `/health`. Use the administrator outbox endpoint to show an empty backlog and inspect the MongoDB `sale_events` audit collection.
 
 The deterministic Playwright suite automates these critical flows, including validation, idempotent cancellation, pagination correction, expired authentication, interrupted responses, keyboard use, mobile layout, and accessibility checks.
 
 ## Test and quality commands
 
-Backend tests require a running Docker engine because the integration and functional suites create isolated PostgreSQL containers through Testcontainers:
+Backend tests require a running Docker engine because the integration suite creates isolated PostgreSQL and MongoDB containers through Testcontainers:
 
 ```powershell
 dotnet restore Ambev.DeveloperEvaluation.sln
@@ -310,6 +320,8 @@ The table below is historical pre-T17 evidence from the clean GitHub-hosted run 
 
 The T17 branch was then verified locally with 160 unit, 97 functional, 22 PostgreSQL integration, and 81 Angular tests. The independently merged reports measured **93.4% backend lines / 90.3% backend branches** and **95.2% frontend lines / 93.7% frontend branches**. The pull-request pipeline is the authoritative clean-environment confirmation for these gates.
 
+The T15 outbox extension was verified locally with **164 unit, 100 functional, and 33 PostgreSQL/MongoDB integration tests**. Backend coverage remained above its gate at **94.1% lines / 90.2% branches**. A disposable Compose stack created a sale through the authenticated API, delivered one audit document to MongoDB, drained the PostgreSQL outbox to zero pending events with zero dead letters, and reported overall health as `Healthy`.
+
 Reports are retained as workflow artifacts for seven days. The pipeline measures backend and frontend separately and blocks either application below 90% line or branch coverage. Backend measurement excludes only EF migrations, generated code, the declarative host bootstrap, and the design-time context factory through [the committed run settings](../.config/coverage.runsettings). Frontend measurement includes application TypeScript and Angular templates except declarative route/bootstrap configuration and test files. The percentage complements the scenario matrix; it does not replace behavior-focused assertions. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
 
 ## Design decisions
@@ -323,14 +335,14 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 - **Query performance:** list queries project in PostgreSQL, use stable allowlisted ordering, and avoid loading item collections for pagination.
 - **Object mapping:** AutoMapper 13.0.1 was removed because of high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Riok.Mapperly 4.3.1 now generates strict, feature-local mappings at compile time, so no runtime mapper registration or reflection is required.
 - **Security:** sales require explicit roles, login is rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
-- **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs and are logged only after a successful commit.
+- **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs. They are stored transactionally with the sale and delivered at least once to an idempotent MongoDB audit projection.
 - **Frontend session:** the JWT remains in memory to avoid persistent browser storage of bearer credentials.
-- **Infrastructure scope:** PostgreSQL is the only required data service. MongoDB and Redis were removed because the delivered use cases do not use them.
+- **Infrastructure scope:** PostgreSQL remains the source of truth. MongoDB stores the queryable audit projection; Redis and a message broker are not required for this single-service delivery.
 
 ## Known limitations and production follow-ups
 
 - Reloading the browser clears the in-memory JWT and requires authentication again. A production session design needs a backend-supported refresh mechanism, rotation, revocation, and secure cookie policy before persistence is introduced.
-- Structured event logging is not durable. A process failure after the database commit can lose an event; a transactional outbox and idempotent consumer are the intended production evolution.
+- Audit delivery is eventually consistent and at least once. A crash after MongoDB accepts an event but before PostgreSQL records completion causes a safe idempotent replay. Exhausted retries remain visible as dead letters and require an administrator replay after the dependency is repaired.
 - Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
 - The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
@@ -345,6 +357,7 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 | PostgreSQL does not start         | Verify `POSTGRES_PASSWORD` is present and matches the password in `DATABASE_CONNECTION_STRING`; inspect `docker compose logs database`.      |
 | Migration container exits nonzero | Inspect `docker compose logs migrations`; verify the connection string uses host `database` and port `5432` inside Compose.                  |
 | API returns 503 or is not ready   | Check `docker compose ps`, `/health/ready`, and the PostgreSQL logs.                                                                         |
+| Audit backlog becomes degraded    | Check `/health`, `GET /api/operations/outbox`, and `audit-database` logs; repair MongoDB, then replay any dead letters.                      |
 | Login returns 401                 | Confirm the development seed is enabled and that the configured email and password match. Restart the API after changing seed configuration. |
 | Login returns 429                 | Wait for the one-minute development rate-limit window before trying again.                                                                   |
 | Sales return 403                  | Authenticate as a `Manager` or `Admin`; `Customer` is intentionally denied.                                                                  |
@@ -352,7 +365,7 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 | Mutation returns 412              | Refresh the sale and reconcile the retained draft with the latest server state.                                                              |
 | Angular reload returns to login   | This is the documented in-memory token behavior; sign in again and the internal return URL is restored.                                      |
 | Testcontainers tests cannot start | Start Docker and confirm `docker version` succeeds in the same shell or IDE environment.                                                     |
-| A port is already in use          | Override `DATABASE_PORT`, `API_PORT`, or `FRONTEND_PORT` in the local `.env` file.                                                           |
+| A port is already in use          | Override `DATABASE_PORT`, `MONGODB_PORT`, `API_PORT`, or `FRONTEND_PORT` in the local `.env` file.                                           |
 
 ## Delivery checklist
 
