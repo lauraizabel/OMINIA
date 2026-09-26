@@ -90,7 +90,7 @@ Start the complete stack:
 docker compose up --detach --build
 ```
 
-The migration container must finish successfully before the API starts. Compose then waits for PostgreSQL, API, and frontend health checks. Open `http://localhost:4200`; API and Swagger remain available at `http://localhost:5119` and `http://localhost:5119/swagger`.
+The migration container must finish successfully before the API starts. Compose then waits for PostgreSQL, API, and frontend health checks. Open `http://localhost:4200`; API and Swagger remain available at `http://localhost:5119` and `http://localhost:5119/swagger`. Jaeger is available at `http://localhost:16686`; the [observability guide](observability.md) explains how to query a trace and how telemetry is sanitized.
 
 Stop the stack while preserving PostgreSQL data with `docker compose down`. Add `--volumes` when an explicit database reset is intended.
 
@@ -98,6 +98,6 @@ On Windows, Docker may fail to resolve a workspace whose path contains decompose
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs backend tests with PostgreSQL Testcontainers, frontend lint/typecheck/tests/build, the isolated Playwright suite, and a complete Compose smoke test. A dedicated job merges backend and frontend Cobertura data into a code-coverage summary displayed in the workflow run. Test results, combined coverage, and browser artifacts are retained for seven days. Pull-request runs are cancelled when a newer commit supersedes them.
+`.github/workflows/ci.yml` runs backend tests with PostgreSQL Testcontainers, frontend lint/typecheck/tests/build, the isolated Playwright suite, and a complete Compose smoke test. The smoke job also verifies the same-origin OTLP proxy and waits for an API trace to become queryable in Jaeger. A dedicated job merges backend and frontend Cobertura data into a code-coverage summary displayed in the workflow run. Test results, combined coverage, and browser artifacts are retained for seven days. Pull-request runs are cancelled when a newer commit supersedes them.
 
 Production must supply `Jwt__SecretKey`, `Jwt__Issuer`, and `Jwt__Audience` from its secret/configuration provider. It must also expose the application over HTTPS and configure each public browser origin through `Cors__AllowedOrigins`. Production refresh cookies are `Secure`, `HttpOnly`, `SameSite=Strict`, use `Path=/`, and carry the `__Host-` prefix. The application fails during startup when JWT or refresh-cookie configuration is invalid.

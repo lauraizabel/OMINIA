@@ -2,6 +2,7 @@ using Ambev.DeveloperEvaluation.Application.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace Ambev.DeveloperEvaluation.ORM.Outbox;
 
@@ -89,12 +90,15 @@ public sealed class OutboxProcessor
         Guid lockToken,
         CancellationToken cancellationToken)
     {
+        using var activity = OutboxTelemetry.StartDelivery(message);
         try
         {
             await _publisher.PublishAsync(message.ToEventMessage(), cancellationToken);
             message.Complete(lockToken, _timeProvider.GetUtcNow());
             if (!await SaveStateIfLeaseOwnedAsync(message, cancellationToken))
                 return;
+
+            activity?.SetStatus(ActivityStatusCode.Ok);
 
             _logger.LogInformation(
                 "Outbox event delivered. EventId: {EventId}, EventType: {EventType}, SaleId: {SaleId}, Version: {Version}, Attempt: {Attempt}",
@@ -106,6 +110,7 @@ public sealed class OutboxProcessor
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             var now = _timeProvider.GetUtcNow();
             var error = Truncate(exception.Message, 2000);
 

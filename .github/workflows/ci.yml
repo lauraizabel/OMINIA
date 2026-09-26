@@ -200,7 +200,7 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Build and start stack
         run: docker compose up --detach --build --wait --wait-timeout 240
-      - name: Verify frontend, API proxy, and authentication
+      - name: Verify frontend, API proxy, authentication, and telemetry
         shell: bash
         run: |
           curl --fail --silent --show-error http://127.0.0.1:4200/health
@@ -209,6 +209,27 @@ jobs:
             --header 'Content-Type: application/json' \
             --data "{\"email\":\"$DEVELOPMENT_ADMIN_EMAIL\",\"password\":\"$DEVELOPMENT_ADMIN_PASSWORD\"}" \
             http://127.0.0.1:4200/api/auth > /dev/null
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"resourceSpans":[]}' \
+            http://127.0.0.1:4200/otel/v1/traces > /dev/null
+
+          for attempt in {1..30}; do
+            start_time="$(date --utc --date='5 minutes ago' --iso-8601=seconds)"
+            end_time="$(date --utc --iso-8601=seconds)"
+            if curl --fail --silent --show-error --get \
+              --data-urlencode 'query.service_name=ambev-sales-api' \
+              --data-urlencode "query.start_time_min=$start_time" \
+              --data-urlencode "query.start_time_max=$end_time" \
+              http://127.0.0.1:16686/api/v3/trace-summaries \
+              | grep --quiet '"traceId"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo 'The API trace was not queryable in Jaeger after 30 seconds.' >&2
+          exit 1
       - name: Show container logs
         if: failure()
         run: docker compose logs --no-color

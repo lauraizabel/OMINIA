@@ -79,7 +79,8 @@
             "coverageExclude": [
               "src/app/**/*.spec.ts",
               "src/app/app.config.ts",
-              "src/app/app.routes.ts"
+              "src/app/app.routes.ts",
+              "src/app/core/observability/initialize-telemetry.ts"
             ],
             "coverageThresholds": {
               "lines": 90,

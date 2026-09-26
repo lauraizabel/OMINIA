@@ -25,6 +25,10 @@ Package metadata was read from NuGet on September 25, 2026. Transitive packages 
 | Npgsql.EntityFrameworkCore.PostgreSQL | 8.0.8 | PostgreSQL |
 | NSubstitute | 5.1.0 | BSD-3-Clause |
 | OneOf | 3.0.271 | License URL |
+| OpenTelemetry.Exporter.OpenTelemetryProtocol | 1.16.0 | Apache-2.0 |
+| OpenTelemetry.Extensions.Hosting | 1.16.0 | Apache-2.0 |
+| OpenTelemetry.Instrumentation.AspNetCore | 1.16.0 | Apache-2.0 |
+| OpenTelemetry.Instrumentation.Http | 1.16.0 | Apache-2.0 |
 | Riok.Mapperly | 4.3.1 | Apache-2.0 |
 | Roslynator.Analyzers | 4.12.4 | Apache-2.0 |
 | Roslynator.Testing.CSharp.Xunit | 4.12.4 | Apache-2.0 |
@@ -48,4 +52,8 @@ Package metadata was read from NuGet on September 25, 2026. Transitive packages 
 AutoMapper 13.0.1 was removed because it is affected by the high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Fixed AutoMapper versions start at 15.1.1 and belong to the newer commercial-license line, so the project migrated to the Apache-2.0-licensed Riok.Mapperly 4.3.1 instead.
 
 Mapperly generates the feature-local mappings at compile time. This keeps mapping definitions explicit and compiler-checked without a runtime mapper service or reflection. The package is referenced with `PrivateAssets="all"` and `ExcludeAssets="runtime"` because only its source generator and annotations are needed during compilation.
+
+### Browser telemetry and local trace backend
+
+The Angular application directly references `@opentelemetry/api` 1.9.0, the 2.11.0 browser tracing SDK packages, OTLP HTTP exporter 0.222.0, and semantic conventions 1.43.0. Their package metadata declares Apache-2.0 licenses. Compose pins the all-in-one Jaeger image to `2.21.0`. See the [observability guide](observability.md) for the trust boundary and production requirements.
 

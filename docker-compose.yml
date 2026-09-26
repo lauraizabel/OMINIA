@@ -47,6 +47,14 @@ services:
       retries: 12
     restart: unless-stopped
 
+  telemetry:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
+      - "127.0.0.1:${OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${OTLP_HTTP_PORT:-4318}:4318"
+    restart: unless-stopped
+
   webapi:
     image: ambev-developer-evaluation-webapi:local
     build:
@@ -63,6 +71,8 @@ services:
       DevelopmentAdmin__Password: ${DEVELOPMENT_ADMIN_PASSWORD:-}
       MongoAudit__Enabled: "true"
       MongoAudit__ConnectionString: mongodb://audit-database:27017
+      Telemetry__Enabled: "true"
+      Telemetry__OtlpEndpoint: http://telemetry:4317
     ports:
       - "127.0.0.1:${API_PORT:-5119}:8080"
     depends_on:
@@ -72,6 +82,8 @@ services:
         condition: service_completed_successfully
       audit-database:
         condition: service_healthy
+      telemetry:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -94,9 +106,13 @@ services:
       dockerfile: src/frontend/Dockerfile
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-4200}:8080"
+    volumes:
+      - ./.config/frontend-telemetry.compose.json:/usr/share/nginx/html/telemetry-config.json:ro
     depends_on:
       webapi:
         condition: service_healthy
+      telemetry:
+        condition: service_started
     healthcheck:
       test:
         [

@@ -15,7 +15,7 @@ public sealed class HttpCorrelationIdProvider : ICorrelationIdProvider
     }
 
     public string CorrelationId =>
-        _httpContextAccessor.HttpContext?.TraceIdentifier
-        ?? Activity.Current?.TraceId.ToString()
+        Activity.Current?.TraceId.ToString()
+        ?? _httpContextAccessor.HttpContext?.TraceIdentifier
         ?? (_fallbackCorrelationId ??= Guid.NewGuid().ToString("N"));
 }
