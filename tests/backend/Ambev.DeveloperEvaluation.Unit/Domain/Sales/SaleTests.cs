@@ -210,6 +210,38 @@ public sealed class SaleTests
             .Which.Code.Should().Be(DomainErrorCodes.Sale.NumberTooLong);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_ShouldRejectBlankSaleNumber(string number)
+    {
+        var action = () => Sale.Create(
+            number,
+            SaleTestData.Now,
+            SaleTestData.Customer(),
+            SaleTestData.Branch(),
+            [SaleTestData.NewItem(1)],
+            SaleTestData.Now);
+
+        action.Should().Throw<DomainValidationException>()
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.NumberRequired);
+    }
+
+    [Fact]
+    public void Create_ShouldRejectControlCharactersInSaleNumber()
+    {
+        var action = () => Sale.Create(
+            "SALE\u0001NUMBER",
+            SaleTestData.Now,
+            SaleTestData.Customer(),
+            SaleTestData.Branch(),
+            [SaleTestData.NewItem(1)],
+            SaleTestData.Now);
+
+        action.Should().Throw<DomainValidationException>()
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.NumberContainsControlCharacter);
+    }
+
     [Fact]
     public void Create_ShouldRejectMoreThanOneHundredItems()
     {
@@ -406,6 +438,72 @@ public sealed class SaleTests
         action.Should()
             .Throw<DomainValidationException>()
             .Which.Code.Should().Be(DomainErrorCodes.SaleItem.ProductIsImmutable);
+    }
+
+    [Fact]
+    public void Update_ShouldRejectEmptyUnknownCancelledAndRepeatedItemIdentifiers()
+    {
+        var sale = SaleTestData.CreateSale(SaleTestData.NewItem(1), SaleTestData.NewItem(2));
+        var first = sale.Items[0];
+        var second = sale.Items[1];
+        sale.CancelItem(second.Id, SaleTestData.Now.AddMinutes(1));
+
+        foreach (var invalidId in new[] { Guid.Empty, Guid.NewGuid(), second.Id })
+        {
+            var action = () => sale.Update(
+                sale.SaleDate,
+                sale.Customer,
+                sale.Branch,
+                [SaleItemDraft.Existing(invalidId, first.Product, 1, 10m)],
+                SaleTestData.Now.AddMinutes(2));
+            action.Should().Throw<DomainValidationException>()
+                .Which.Code.Should().Be(DomainErrorCodes.SaleItem.InvalidId);
+        }
+
+        var duplicate = () => sale.Update(
+            sale.SaleDate,
+            sale.Customer,
+            sale.Branch,
+            [
+                SaleTestData.ExistingItem(first),
+                SaleItemDraft.Existing(first.Id, SaleTestData.Product(3), first.Quantity, first.UnitPrice)
+            ],
+            SaleTestData.Now.AddMinutes(2));
+        duplicate.Should().Throw<DomainValidationException>()
+            .Which.Code.Should().Be(DomainErrorCodes.SaleItem.DuplicateId);
+    }
+
+    [Fact]
+    public void Update_ShouldCountCancelledHistoryAgainstItemCapacity()
+    {
+        var sale = SaleTestData.CreateSale(
+            Enumerable.Range(1, Sale.MaximumItems)
+                .Select(index => SaleTestData.NewItem(index))
+                .ToArray());
+        sale.CancelItem(sale.Items[0].Id, SaleTestData.Now.AddMinutes(1));
+        var active = sale.Items.Where(item => !item.IsCancelled)
+            .Select(item => SaleTestData.ExistingItem(item))
+            .Append(SaleTestData.NewItem(101))
+            .ToArray();
+
+        var action = () => sale.Update(
+            sale.SaleDate,
+            sale.Customer,
+            sale.Branch,
+            active,
+            SaleTestData.Now.AddMinutes(2));
+
+        action.Should().Throw<DomainValidationException>()
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.TooManyItems);
+    }
+
+    [Fact]
+    public void Operations_ShouldRejectATimestampBeforeCreation()
+    {
+        var sale = SaleTestData.CreateSale(SaleTestData.NewItem(1));
+        var action = () => sale.Cancel(SaleTestData.Now.AddTicks(-1));
+        action.Should().Throw<DomainValidationException>()
+            .Which.Code.Should().Be(DomainErrorCodes.Sale.OperationBeforeCreation);
     }
 
     [Fact]

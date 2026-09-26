@@ -35,6 +35,7 @@ jobs:
           --configuration Release
           --no-build
           --logger "trx"
+          --settings .config/coverage.runsettings
           --collect "XPlat Code Coverage"
           --results-directory artifacts/backend
       - name: Upload backend results
@@ -89,6 +90,7 @@ jobs:
     needs: [backend, frontend]
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.416
@@ -102,21 +104,33 @@ jobs:
         with:
           name: frontend-test-results
           path: artifacts/coverage-input/frontend
-      - name: Generate combined coverage report
+      - name: Generate independent coverage reports
         shell: bash
         run: |
           dotnet tool install dotnet-reportgenerator-globaltool \
             --tool-path .tools \
             --version 5.5.11
           .tools/reportgenerator \
-            '-reports:artifacts/coverage-input/**/coverage.cobertura.xml;artifacts/coverage-input/**/cobertura-coverage.xml' \
-            '-targetdir:artifacts/coverage-report' \
-            '-reporttypes:Cobertura;MarkdownSummaryGithub'
-          cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload combined coverage report
+            '-reports:artifacts/coverage-input/backend/**/coverage.cobertura.xml' \
+            '-targetdir:artifacts/coverage-report/backend' \
+            '-reporttypes:Cobertura;JsonSummary;MarkdownSummaryGithub'
+          .tools/reportgenerator \
+            '-reports:artifacts/coverage-input/frontend/**/cobertura-coverage.xml' \
+            '-targetdir:artifacts/coverage-report/frontend' \
+            '-reporttypes:Cobertura;JsonSummary;MarkdownSummaryGithub'
+          echo '## Backend coverage' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/coverage-report/backend/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          echo '## Frontend coverage' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/coverage-report/frontend/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce backend and frontend coverage gates
+        shell: pwsh
+        run: |
+          ./.config/assert-coverage.ps1 -SummaryPath artifacts/coverage-report/backend/Summary.json -Label Backend
+          ./.config/assert-coverage.ps1 -SummaryPath artifacts/coverage-report/frontend/Summary.json -Label Frontend
+      - name: Upload coverage reports
         uses: actions/upload-artifact@v7
         with:
-          name: combined-code-coverage
+          name: code-coverage
           path: artifacts/coverage-report
           if-no-files-found: error
           retention-days: 7

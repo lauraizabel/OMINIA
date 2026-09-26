@@ -253,6 +253,7 @@ dotnet test Ambev.DeveloperEvaluation.sln `
   --configuration Release `
   --no-build `
   --logger "trx" `
+  --settings .config/coverage.runsettings `
   --collect "XPlat Code Coverage" `
   --results-directory artifacts/backend
 ```
@@ -286,15 +287,15 @@ The [GitHub Actions workflow](../.github/workflows/ci.yml) runs on every pull re
 
 | Job                    | Verification                                                                                          |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| Backend tests          | Restore, Release build, 208 unit/integration/functional tests, TRX, and Cobertura                     |
-| Frontend checks        | npm lockfile restore, lint, strict typecheck, 46 tests, coverage, and production build                |
-| Code coverage          | Merge backend and frontend Cobertura reports and publish a workflow summary                           |
+| Backend tests          | Restore, Release build, unit/integration/functional tests, TRX, and scoped Cobertura                  |
+| Frontend checks        | npm lockfile restore, lint, strict typecheck, unit tests, 90% coverage gate, and production build     |
+| Code coverage          | Publish separate backend/frontend reports and block below 90% lines or branches                       |
 | Isolated browser suite | Run 13 Playwright scenarios against real Angular, API, and PostgreSQL processes                       |
 | Container stack smoke  | Build the production-like stack, wait for health, and verify frontend, API, proxy, and authentication |
 
 ### Recorded delivery evidence
 
-The clean GitHub-hosted run for merge commit `df4fadf` completed successfully on September 25, 2026. The evidence is available in [GitHub Actions run 36174441138](https://github.com/lauraizabel/OMINIA/actions/runs/36174441138).
+The table below is historical pre-T17 evidence from the clean GitHub-hosted run for merge commit `df4fadf` on September 25, 2026. It remains linked for traceability in [GitHub Actions run 36174441138](https://github.com/lauraizabel/OMINIA/actions/runs/36174441138).
 
 | Suite                    |                                                                  Result |
 | ------------------------ | ----------------------------------------------------------------------: |
@@ -307,7 +308,9 @@ The clean GitHub-hosted run for merge commit `df4fadf` completed successfully on
 | Combined line coverage   |                                  71.5% — 3,284 of 4,591 coverable lines |
 | Combined branch coverage |                                           66.1% — 675 of 1,020 branches |
 
-Reports are retained as workflow artifacts for seven days. Raising backend and frontend line and branch coverage independently to at least 90% is a documented follow-up; the current percentage is not presented as a substitute for scenario coverage. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
+The T17 branch was then verified locally with 160 unit, 97 functional, 22 PostgreSQL integration, and 81 Angular tests. The independently merged reports measured **93.4% backend lines / 90.3% backend branches** and **95.2% frontend lines / 93.7% frontend branches**. The pull-request pipeline is the authoritative clean-environment confirmation for these gates.
+
+Reports are retained as workflow artifacts for seven days. The pipeline measures backend and frontend separately and blocks either application below 90% line or branch coverage. Backend measurement excludes only EF migrations, generated code, the declarative host bootstrap, and the design-time context factory through [the committed run settings](../.config/coverage.runsettings). Frontend measurement includes application TypeScript and Angular templates except declarative route/bootstrap configuration and test files. The percentage complements the scenario matrix; it does not replace behavior-focused assertions. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
 
 ## Design decisions
 
@@ -331,7 +334,6 @@ Reports are retained as workflow artifacts for seven days. Raising backend and f
 - Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
 - The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
-- The current combined coverage is below the planned 90% per-application quality gate, although critical rules and end-to-end paths are covered.
 - The repository does not include cloud infrastructure, deployment automation, a message broker, or production observability exporters.
 - Swagger is enabled only in Development.
 - Docker Desktop on Windows can fail to resolve paths containing decomposed Unicode characters. Use an ASCII-only checkout path such as `D:\work\ambev-evaluation`; the isolated E2E runner handles the current workspace with a temporary drive mapping.

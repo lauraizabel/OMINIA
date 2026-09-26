@@ -115,6 +115,50 @@ public sealed class SaleReadServiceTests
         Assert.Equal(match.Id, Assert.Single(result.Data).Id);
     }
 
+    [Fact]
+    public async Task List_supports_every_sale_number_boundary_amount_date_state_and_order_direction()
+    {
+        await ResetDatabaseAsync();
+        var alpha = CreateSale("ALPHA-MATCH", Now.AddDays(-2), "C1", "B1", 10m);
+        var beta = CreateSale("MATCH-BETA", Now.AddDays(-1), "C2", "B2", 20m);
+        var cancelled = CreateSale("MATCH-CANCELLED", Now.AddHours(-1), "C1", "B1", 30m);
+        cancelled.Cancel(Now);
+        await SeedAsync(alpha, beta, cancelled);
+        await using var context = CreateContext();
+        var service = new SaleReadService(context);
+
+        Assert.Equal(alpha.Id, Assert.Single((await service.ListAsync(
+            Criteria() with { SaleNumber = new SaleNumberFilter("ALPHA-MATCH", false, false) })).Data).Id);
+        Assert.Equal(alpha.Id, Assert.Single((await service.ListAsync(
+            Criteria() with { SaleNumber = new SaleNumberFilter("ALPHA", false, true) })).Data).Id);
+        Assert.Equal(beta.Id, Assert.Single((await service.ListAsync(
+            Criteria() with { SaleNumber = new SaleNumberFilter("BETA", true, false) })).Data).Id);
+
+        var bounded = await service.ListAsync(Criteria() with
+        {
+            CancellationStates = [true],
+            MaximumSaleDate = Now,
+            MaximumTotalAmount = 0m
+        });
+        Assert.Equal(cancelled.Id, Assert.Single(bounded.Data).Id);
+        var minimum = await service.ListAsync(Criteria() with
+        {
+            CancellationStates = [false],
+            MinimumTotalAmount = 15m
+        });
+        Assert.Equal(beta.Id, Assert.Single(minimum.Data).Id);
+
+        var orders = new[]
+        {
+            new[] { new SaleOrder(SaleOrderField.SaleDate, SortDirection.Ascending), new SaleOrder(SaleOrderField.Id, SortDirection.Descending) },
+            new[] { new SaleOrder(SaleOrderField.SaleNumber, SortDirection.Descending), new SaleOrder(SaleOrderField.Id, SortDirection.Ascending) },
+            new[] { new SaleOrder(SaleOrderField.TotalAmount, SortDirection.Ascending), new SaleOrder(SaleOrderField.Id, SortDirection.Descending) },
+            new[] { new SaleOrder(SaleOrderField.Id, SortDirection.Descending) }
+        };
+        foreach (var order in orders)
+            Assert.Equal(3, (await service.ListAsync(Criteria() with { Order = order })).Data.Count);
+    }
+
     private SaleListCriteria Criteria(int pageSize = 10) => new(
         1,
         pageSize,
