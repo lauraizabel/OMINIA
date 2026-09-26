@@ -26,7 +26,8 @@ services:
       DevelopmentAdmin__Enabled: 'true'
       DevelopmentAdmin__Email:
       DevelopmentAdmin__Password:
-      Security__LoginRateLimit__PermitLimit: 20
+      Security__LoginRateLimit__PermitLimit: 50
+      Cors__AllowedOrigins__0:
     ports:
       - '127.0.0.1:5120:8080'
     depends_on:

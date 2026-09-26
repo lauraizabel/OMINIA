@@ -42,12 +42,33 @@ describe('AuthService', () => {
 
     const request = http.expectOne('/api/auth');
     expect(request.request.method).toBe('POST');
+    expect(request.request.withCredentials).toBe(true);
     expect(request.request.body).toEqual({ email: session.email, password: 'secret' });
     request.flush({ success: true, message: 'Authenticated', data: session });
 
     expect(result).toEqual(session);
     expect(auth.session()).toEqual(session);
     expect(auth.isAuthenticated()).toBe(true);
+  });
+
+  it('restores a session through the HttpOnly refresh cookie', async () => {
+    const restored = auth.restoreSession();
+    const request = http.expectOne('/api/auth/refresh');
+    expect(request.request.withCredentials).toBe(true);
+    expect(request.request.body).toBeNull();
+    request.flush({ success: true, message: 'Refreshed', data: session });
+
+    await restored;
+    expect(auth.session()).toEqual(session);
+  });
+
+  it('coalesces concurrent refresh requests', () => {
+    auth.refreshSession().subscribe();
+    auth.refreshSession().subscribe();
+
+    const requests = http.match('/api/auth/refresh');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ success: true, message: 'Refreshed', data: session });
   });
 
   it('clears the session on logout and reports expiration only once', () => {
@@ -58,7 +79,10 @@ describe('AuthService', () => {
     expect(auth.expireSession()).toBe(false);
     expect(auth.session()).toBeNull();
 
-    auth.logout();
+    auth.logout().subscribe();
+    const logout = http.expectOne('/api/auth/logout');
+    expect(logout.request.withCredentials).toBe(true);
+    logout.flush(null);
     expect(auth.isAuthenticated()).toBe(false);
   });
 });

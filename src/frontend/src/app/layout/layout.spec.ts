@@ -1,4 +1,5 @@
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
@@ -8,7 +9,7 @@ import { UserMenu } from './user-menu/user-menu';
 
 describe('application layout', () => {
   it('shows the active identity and signs out before navigating to login', () => {
-    const logout = vi.fn();
+    const logout = vi.fn(() => of(undefined));
     TestBed.configureTestingModule({
       imports: [AppShell],
       providers: [

@@ -7,5 +7,6 @@ RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.27.5-alpine AS final
 COPY src/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY src/frontend/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
 EXPOSE 8080

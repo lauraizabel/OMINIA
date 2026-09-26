@@ -57,6 +57,7 @@ public static class ApiConfigurationExtensions
         });
 
         services.AddValidatorsFromAssembly(typeof(ApplicationLayer).Assembly);
+        services.AddSingleton<RefreshTokenCookieManager>();
 
         services.AddAuthorizationBuilder()
             .AddPolicy(ApiPolicies.Administrators, policy =>
@@ -74,7 +75,8 @@ public static class ApiConfigurationExtensions
                 {
                     policy.WithOrigins(allowedOrigins)
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 }
             });
         });
@@ -108,6 +110,17 @@ public static class ApiConfigurationExtensions
                         AutoReplenishment = true
                     });
             });
+
+            options.AddPolicy(RateLimitPolicies.Session, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
         });
 
         services.AddOptions<LoginRateLimitOptions>()

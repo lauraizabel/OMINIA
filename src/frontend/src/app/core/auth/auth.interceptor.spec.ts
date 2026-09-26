@@ -56,23 +56,40 @@ describe('authInterceptor', () => {
     ).toBe(false);
   });
 
-  it('clears an expired session and redirects once without retrying the request', async () => {
+  it('rotates the session once and retries an unauthorized API request', async () => {
     authenticate();
     const client = TestBed.inject(HttpClient);
 
-    const firstCall = firstValueFrom(client.get('/api/sales')).catch(() => undefined);
+    const firstCall = firstValueFrom(client.get('/api/sales'));
     http.expectOne('/api/sales').flush({}, { status: 401, statusText: 'Unauthorized' });
+    const refresh = http.expectOne('/api/auth/refresh');
+    expect(refresh.request.withCredentials).toBe(true);
+    refresh.flush({
+      success: true,
+      message: 'Refreshed',
+      data: { ...session, token: 'rotated-token' },
+    });
+    const retry = http.expectOne('/api/sales');
+    expect(retry.request.headers.get('Authorization')).toBe('Bearer rotated-token');
+    retry.flush({ ok: true });
     await firstCall;
+
+    expect(auth.isAuthenticated()).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('clears an expired session when refresh fails and redirects once', async () => {
+    authenticate();
+    const client = TestBed.inject(HttpClient);
+
+    const call = firstValueFrom(client.get('/api/sales')).catch(() => undefined);
+    http.expectOne('/api/sales').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/auth/refresh').flush({}, { status: 401, statusText: 'Unauthorized' });
+    await call;
 
     expect(auth.isAuthenticated()).toBe(false);
     expect(navigate).toHaveBeenCalledOnce();
     expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/sales/42' } });
-
-    const secondCall = firstValueFrom(client.get('/api/sales')).catch(() => undefined);
-    http.expectOne('/api/sales').flush({}, { status: 401, statusText: 'Unauthorized' });
-    await secondCall;
-
-    expect(navigate).toHaveBeenCalledOnce();
   });
 
   it('keeps the session and routes forbidden responses to the access-denied page', async () => {

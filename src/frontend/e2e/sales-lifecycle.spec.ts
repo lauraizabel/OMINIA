@@ -45,6 +45,7 @@ test('E02 changes from three units without discount to ten units with the persis
   await page.getByRole('link', { name: 'Edit sale' }).click();
   await page.locator('[data-item-index="0"]').getByLabel('Quantity').fill('10');
   await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page).toHaveURL(new RegExp(`/sales/${id}(?:\\?|$)`));
   await expect(page.getByText(/R\$\s*80[,.]00/).first()).toBeVisible();
 
   const response = await page.request.get(`/api/sales/${id}`, {
@@ -97,6 +98,7 @@ test('E04 cancels one item and then the last item while retaining history', asyn
   const sale = uniqueSale('E2E-ITEMS');
   await signIn(page);
   await page.getByRole('link', { name: 'New sale' }).click();
+  await expect(page).toHaveURL(/\/sales\/new/);
   await fillSale(page, sale);
   await page.getByRole('button', { name: 'Add item' }).click();
   const secondItem = page.locator('[data-item-index="1"]');

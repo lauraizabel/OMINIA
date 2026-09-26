@@ -35,7 +35,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
     /// - Name (Username)
     /// - Role (User role)
     /// 
-    /// The token is valid for 8 hours from the moment of generation.
+    /// The token lifetime comes from the validated JWT configuration.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when user or secret key is not provided.</exception>
     public string GenerateToken(IUser user)

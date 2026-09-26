@@ -17,7 +17,6 @@ export class AppShell {
   readonly session = this.auth.session;
 
   logout(): void {
-    this.auth.logout();
-    void this.router.navigate(['/login']);
+    this.auth.logout().subscribe(() => void this.router.navigate(['/login']));
   }
 }

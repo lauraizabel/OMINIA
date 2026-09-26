@@ -10,6 +10,10 @@ public sealed class AuthenticateUserResult
     /// </summary>
     public string Token { get; set; } = string.Empty;
 
+    public string RefreshToken { get; set; } = string.Empty;
+
+    public DateTimeOffset RefreshTokenExpiresAt { get; set; }
+
     /// <summary>
     /// Gets or sets the user's unique identifier
     /// </summary>

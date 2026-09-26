@@ -4,20 +4,20 @@ This suite runs the Angular application against a real API and PostgreSQL databa
 
 ## Scenario coverage
 
-| Scenario | Automated evidence                                                                                                         |
-| -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| E01      | Create four units and verify the 10% discount in the UI and API.                                                           |
-| E02      | Move from three to ten units and verify the persisted discount tier.                                                       |
-| E03      | Reject an excessive quantity and duplicate products in both UI and direct API calls.                                       |
-| E04      | Cancel one item and then the final item while retaining history and reaching a zero total.                                 |
-| E05      | Repeat a full-sale cancellation without duplicating its effect.                                                            |
-| E06      | Delete the only result on the last page, correct pagination, and confirm API absence.                                      |
-| E07      | Submit two edits with the same ETag and preserve the losing session's draft.                                               |
-| E08      | Preserve filter, order, size, and page through detail navigation.                                                          |
-| E09      | Use a genuinely expired signed JWT and verify one login redirect and one write attempt.                                    |
-| E10      | Interrupt the create response after persistence, avoid an automatic retry, and find one sale by number.                    |
-| E11      | Check a mobile viewport, labels, invalid-field focus, keyboard activation, confirmation focus, and serious axe violations. |
-| E12      | Protect a direct route and restore it after login both before and after a full reload.                                     |
+| Scenario | Automated evidence                                                                                                                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E01      | Create four units and verify the 10% discount in the UI and API.                                                                                     |
+| E02      | Move from three to ten units and verify the persisted discount tier.                                                                                 |
+| E03      | Reject an excessive quantity and duplicate products in both UI and direct API calls.                                                                 |
+| E04      | Cancel one item and then the final item while retaining history and reaching a zero total.                                                           |
+| E05      | Repeat a full-sale cancellation without duplicating its effect.                                                                                      |
+| E06      | Delete the only result on the last page, correct pagination, and confirm API absence.                                                                |
+| E07      | Submit two edits with the same ETag and preserve the losing session's draft.                                                                         |
+| E08      | Preserve filter, order, size, and page through detail navigation.                                                                                    |
+| E09      | Use a genuinely expired signed JWT and verify one login redirect and one write attempt.                                                              |
+| E10      | Interrupt the create response after persistence, avoid an automatic retry, and find one sale by number.                                              |
+| E11      | Check a mobile viewport, labels, invalid-field focus, keyboard activation, confirmation focus, and serious axe violations.                           |
+| E12      | Protect a direct route, restore it from the `HttpOnly` refresh cookie after reload, revoke it on logout, and remain signed out after another reload. |
 
 ## Prerequisites
 

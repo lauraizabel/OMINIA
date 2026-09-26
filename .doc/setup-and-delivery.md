@@ -12,7 +12,7 @@ The repository contains a complete sales vertical slice:
 - PostgreSQL persistence with EF Core migrations and optimistic concurrency;
 - create, detail, list, update, cancellation, item cancellation, and soft-delete operations;
 - server-side discounts and totals using decimal arithmetic;
-- JWT authentication with role-based authorization for `Manager` and `Admin` users;
+- short-lived JWT authentication with rotating, revocable refresh sessions and role-based authorization for `Manager` and `Admin` users;
 - an Angular application for authentication and the complete sales workflow;
 - transactional event outbox with idempotent MongoDB audit storage;
 - unit, integration, functional, Angular, and Playwright browser tests;
@@ -160,6 +160,10 @@ Open `http://localhost:4200`. The Angular development proxy forwards `/api` to `
 | `Jwt__Issuer`                          | JWT issuer                              | committed non-secret default or environment override           |
 | `Jwt__Audience`                        | JWT audience                            | committed non-secret default or environment override           |
 | `Cors__AllowedOrigins__0`              | First permitted browser origin          | environment override; localhost is enabled only in Development |
+| `RefreshSession__IdleExpirationDays`   | Sliding refresh-session lifetime         | committed default or environment override                      |
+| `RefreshSession__AbsoluteExpirationDays` | Maximum refresh-session lifetime       | committed default or environment override                      |
+| `RefreshSession__CookieName`           | Refresh cookie name                      | `__Host-` name required when the secure cookie is enabled       |
+| `RefreshSession__SecureCookie`         | Requires HTTPS for the refresh cookie    | `true` by default; disabled only in Development                 |
 | `DevelopmentAdmin__Enabled`            | Enables the idempotent development seed | local configuration only                                       |
 | `DevelopmentAdmin__Email`              | Seeded development account email        | local configuration only                                       |
 | `DevelopmentAdmin__Password`           | Seeded development account password     | local configuration only                                       |
@@ -174,7 +178,8 @@ The development administrator is never seeded outside the Development environmen
 flowchart LR
     Browser[Angular client] -->|HTTPS / JSON| Proxy[Nginx or Angular dev proxy]
     Proxy --> API[ASP.NET Core Web API]
-    API --> Auth[JWT authorization and API protection]
+    API --> Auth[Short-lived JWT and rotating refresh sessions]
+    Auth --> PostgreSQL
     API --> Mediator[MediatR commands and queries]
     Mediator --> Domain[Sale aggregate and domain rules]
     Mediator --> Repository[Repository and Unit of Work]
@@ -188,9 +193,9 @@ flowchart LR
 | ----------- | --------------------------------------------------------------------------------------------------------------------- |
 | Domain      | Sale invariants, discounts, totals, cancellation, versioning, and domain events                                       |
 | Application | Commands, queries, validators, handlers, ports, and result models                                                     |
-| ORM         | EF Core mappings, repositories, migrations, transactional outbox, leased worker, retries, and MongoDB audit persistence |
+| ORM         | EF Core mappings, repositories, migrations, hashed refresh sessions, transactional outbox, leased worker, retries, and MongoDB audit persistence |
 | IoC         | Dependency registration, correlation IDs, and infrastructure bindings                                                 |
-| WebApi      | HTTP contracts, authentication, authorization, ETags, error mapping, CORS, rate limiting, and health probes           |
+| WebApi      | HTTP contracts, secure cookies, origin validation, authentication, authorization, ETags, rate limiting, and health probes |
 | Frontend    | Authentication, sales list/detail/editor flows, URL-backed filters, concurrency recovery, and accessible interactions |
 
 Sale changes and their outbox messages are committed atomically in PostgreSQL. A background worker claims the earliest event per aggregate with `FOR UPDATE SKIP LOCKED`, writes an idempotent audit document to MongoDB, and then marks the outbox row as processed. Failures use bounded exponential backoff and move to dead letter after the configured attempt limit. This provides at-least-once delivery without presenting MongoDB as the source of sale totals.
@@ -213,6 +218,8 @@ The main endpoints are:
 | Method   | Route                                   | Purpose                                  |
 | -------- | --------------------------------------- | ---------------------------------------- |
 | `POST`   | `/api/auth`                             | Authenticate and obtain a JWT            |
+| `POST`   | `/api/auth/refresh`                     | Rotate the refresh session and obtain a new JWT |
+| `POST`   | `/api/auth/logout`                      | Revoke the refresh-token family and clear its cookie |
 | `GET`    | `/api/sales`                            | Filtered, ordered, paginated list        |
 | `POST`   | `/api/sales`                            | Create a sale                            |
 | `GET`    | `/api/sales/{id}`                       | Retrieve a sale and its `ETag`           |
@@ -322,6 +329,8 @@ The T17 branch was then verified locally with 160 unit, 97 functional, 22 Postgr
 
 The T15 outbox extension was verified locally with **164 unit, 100 functional, and 33 PostgreSQL/MongoDB integration tests**. Backend coverage remained above its gate at **94.1% lines / 90.2% branches**. A disposable Compose stack created a sale through the authenticated API, delivered one audit document to MongoDB, drained the PostgreSQL outbox to zero pending events with zero dead letters, and reported overall health as `Healthy`.
 
+The T18 secure-session extension was verified locally with **165 unit, 117 functional, 39 integration, 84 Angular, and 13 Playwright tests**. Coverage remained above the independent gates at **94.6% backend lines / 90.1% backend branches** and **94.75% frontend lines / 93.29% frontend branches**. The production frontend image returned the configured CSP, HSTS, framing, MIME, referrer, permissions, COOP, and CORP headers. The browser suite proved login, cookie-backed reload restoration, refresh rotation, logout revocation, and a subsequent anonymous reload against disposable PostgreSQL and API containers.
+
 Reports are retained as workflow artifacts for seven days. The pipeline measures backend and frontend separately and blocks either application below 90% line or branch coverage. Backend measurement excludes only EF migrations, generated code, the declarative host bootstrap, and the design-time context factory through [the committed run settings](../.config/coverage.runsettings). Frontend measurement includes application TypeScript and Angular templates except declarative route/bootstrap configuration and test files. The percentage complements the scenario matrix; it does not replace behavior-focused assertions. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
 
 ## Design decisions
@@ -334,14 +343,14 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 - **Deletion:** delete is a tombstone operation; cancellation is a separate business transition.
 - **Query performance:** list queries project in PostgreSQL, use stable allowlisted ordering, and avoid loading item collections for pagination.
 - **Object mapping:** AutoMapper 13.0.1 was removed because of high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Riok.Mapperly 4.3.1 now generates strict, feature-local mappings at compile time, so no runtime mapper registration or reflection is required.
-- **Security:** sales require explicit roles, login is rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
+- **Security:** sales require explicit roles, login and session endpoints are rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
 - **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs. They are stored transactionally with the sale and delivered at least once to an idempotent MongoDB audit projection.
-- **Frontend session:** the JWT remains in memory to avoid persistent browser storage of bearer credentials.
+- **Frontend session:** the 15-minute JWT remains in memory. The browser keeps only an opaque rotating refresh token in an `HttpOnly`, `SameSite=Strict` cookie, so JavaScript cannot read it. PostgreSQL stores its SHA-256 hash, rotation is serialized, replay outside the short concurrency grace period revokes the complete token family, and logout revokes that family before clearing the cookie.
 - **Infrastructure scope:** PostgreSQL remains the source of truth. MongoDB stores the queryable audit projection; Redis and a message broker are not required for this single-service delivery.
 
 ## Known limitations and production follow-ups
 
-- Reloading the browser clears the in-memory JWT and requires authentication again. A production session design needs a backend-supported refresh mechanism, rotation, revocation, and secure cookie policy before persistence is introduced.
+- Refresh-session records are retained for security investigation and currently have no scheduled retention cleanup. A production deployment should define retention according to its audit and privacy requirements.
 - Audit delivery is eventually consistent and at least once. A crash after MongoDB accepts an event but before PostgreSQL records completion causes a safe idempotent replay. Exhausted retries remain visible as dead letters and require an administrator replay after the dependency is repaired.
 - Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
 - Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
@@ -363,7 +372,7 @@ Reports are retained as workflow artifacts for seven days. The pipeline measures
 | Sales return 403                  | Authenticate as a `Manager` or `Admin`; `Customer` is intentionally denied.                                                                  |
 | Mutation returns 428              | Read the sale first and send its current `ETag` in `If-Match`.                                                                               |
 | Mutation returns 412              | Refresh the sale and reconcile the retained draft with the latest server state.                                                              |
-| Angular reload returns to login   | This is the documented in-memory token behavior; sign in again and the internal return URL is restored.                                      |
+| Angular reload returns to login   | Confirm the refresh cookie was accepted, the browser origin appears in `Cors__AllowedOrigins`, and HTTPS is used with the production `Secure` cookie. |
 | Testcontainers tests cannot start | Start Docker and confirm `docker version` succeeds in the same shell or IDE environment.                                                     |
 | A port is already in use          | Override `DATABASE_PORT`, `MONGODB_PORT`, `API_PORT`, or `FRONTEND_PORT` in the local `.env` file.                                           |
 

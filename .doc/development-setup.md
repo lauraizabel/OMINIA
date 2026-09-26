@@ -44,7 +44,7 @@ npm ci
 npm start
 ```
 
-Open `http://localhost:4200`. The development server proxies `/api` to `http://localhost:5119`. Authentication tokens remain in memory and are never written to browser storage, so a page reload requires signing in again. The original internal deep link is restored after a successful login.
+Open `http://localhost:4200`. The development server proxies `/api` to `http://localhost:5119`. The short-lived access token remains in memory and is never written to browser storage. A rotating refresh token in an `HttpOnly` cookie restores the session after a page reload, and the original internal deep link is preserved.
 
 Run the frontend checks with:
 
@@ -100,4 +100,4 @@ On Windows, Docker may fail to resolve a workspace whose path contains decompose
 
 `.github/workflows/ci.yml` runs backend tests with PostgreSQL Testcontainers, frontend lint/typecheck/tests/build, the isolated Playwright suite, and a complete Compose smoke test. A dedicated job merges backend and frontend Cobertura data into a code-coverage summary displayed in the workflow run. Test results, combined coverage, and browser artifacts are retained for seven days. Pull-request runs are cancelled when a newer commit supersedes them.
 
-Production must supply `Jwt__SecretKey`, `Jwt__Issuer`, and `Jwt__Audience` from its secret/configuration provider. The application fails during startup when JWT configuration is missing or invalid.
+Production must supply `Jwt__SecretKey`, `Jwt__Issuer`, and `Jwt__Audience` from its secret/configuration provider. It must also expose the application over HTTPS and configure each public browser origin through `Cors__AllowedOrigins`. Production refresh cookies are `Secure`, `HttpOnly`, `SameSite=Strict`, use `Path=/`, and carry the `__Host-` prefix. The application fails during startup when JWT or refresh-cookie configuration is invalid.
