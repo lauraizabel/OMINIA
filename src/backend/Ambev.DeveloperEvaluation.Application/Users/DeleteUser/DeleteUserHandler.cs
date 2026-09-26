@@ -1,5 +1,4 @@
 using MediatR;
-using FluentValidation;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 
@@ -30,12 +29,6 @@ public class DeleteUserHandler : IRequestHandler<DeleteUserCommand, DeleteUserRe
     /// <returns>The result of the delete operation</returns>
     public async Task<DeleteUserResponse> Handle(DeleteUserCommand request, CancellationToken cancellationToken)
     {
-        var validator = new DeleteUserValidator();
-        var validationResult = await validator.ValidateAsync(request, cancellationToken);
-
-        if (!validationResult.IsValid)
-            throw new ValidationException(validationResult.Errors);
-
         var success = await _userRepository.DeleteAsync(request.Id, cancellationToken);
         if (!success)
         {
