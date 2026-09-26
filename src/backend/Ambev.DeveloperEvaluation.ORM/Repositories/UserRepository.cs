@@ -43,7 +43,9 @@ public class UserRepository : IUserRepository
     /// <returns>The user if found, null otherwise</returns>
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.Users.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        return await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
     }
 
     /// <summary>
@@ -56,6 +58,7 @@ public class UserRepository : IUserRepository
     {
         var normalizedEmail = NormalizeEmail(email);
         return await _context.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, cancellationToken);
     }
 
@@ -67,7 +70,9 @@ public class UserRepository : IUserRepository
     /// <returns>True if the user was deleted, false if not found</returns>
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var user = await GetByIdAsync(id, cancellationToken);
+        var user = await _context.Users.FirstOrDefaultAsync(
+            candidate => candidate.Id == id,
+            cancellationToken);
         if (user == null)
             return false;
 
