@@ -1,399 +1,149 @@
 [Back to README](../README.md)
 
-# Setup and delivery guide
+# Setup and delivery
 
-This guide is the entry point for running, reviewing, testing, and demonstrating the DeveloperStore sales implementation. The original challenge requirements remain in the repository root README. The detailed sales contract is documented in [sales-api.md](sales-api.md), and its machine-readable version is available in [openapi/sales.yaml](openapi/sales.yaml).
+This is the reviewer-oriented guide for the implemented sales solution. Use [development-setup.md](development-setup.md) for detailed local configuration and [sales-api.md](sales-api.md) for the domain and HTTP contract.
 
 ## Delivered scope
 
-The repository contains a complete sales vertical slice:
+- .NET 8 API organized into Domain, Application, ORM, IoC, Common, and WebApi projects.
+- PostgreSQL persistence with EF Core migrations and optimistic concurrency.
+- Angular authentication and complete sales list/detail/create/edit/cancel/delete workflow.
+- Transactional event outbox with idempotent MongoDB audit projection.
+- Rotating refresh sessions, role authorization, rate limiting, origin checks, and structured errors.
+- Docker Compose stack, OpenAPI, Postman, health checks, and OpenTelemetry/Jaeger.
+- Automated unit, integration, functional/API, frontend unit, and Playwright E2E tests.
 
-- a .NET 8 API organized into domain, application, persistence, infrastructure, and HTTP layers;
-- PostgreSQL persistence with EF Core migrations and optimistic concurrency;
-- create, detail, list, update, cancellation, item cancellation, and soft-delete operations;
-- server-side discounts and totals using decimal arithmetic;
-- short-lived JWT authentication with rotating, revocable refresh sessions and role-based authorization for `Manager` and `Admin` users;
-- an Angular application for authentication and the complete sales workflow;
-- transactional event outbox with idempotent MongoDB audit storage;
-- unit, integration, functional, Angular, and Playwright browser tests;
-- a containerized stack and GitHub Actions CI pipeline with coverage reports.
+Customer, branch, and product catalogs are outside this challenge. Sales store external ID/name snapshots so historical descriptions do not depend on those systems.
 
-Customer, branch, and product data use external identity snapshots. They do not depend on catalog services that are outside this challenge.
+## Reviewer quick start
 
-## Prerequisites
-
-The containerized path requires only:
-
-- Git;
-- Docker Engine or Docker Desktop with Docker Compose v2.
-
-Local development outside containers additionally requires:
-
-- .NET SDK `8.0.416`, pinned by `global.json`;
-- Node.js `22.22.3` or a later Node 22 release;
-- npm 10;
-- the local EF Core tool restored from `.config/dotnet-tools.json`.
-
-The delivery was validated with Docker Engine 29.1.3, Docker Compose 2.40.3, .NET SDK 8.0.416, Node.js 22.23.1, and npm 10.9.8. Later compatible patch versions should work, but the CI workflow uses the pinned versions above.
-
-## Quick start with Docker Compose
-
-From the repository root, copy the environment template:
-
-```powershell
+~~~powershell
 Copy-Item .env.example .env
-```
+~~~
 
-Edit `.env` and provide local values:
+Fill POSTGRES_PASSWORD, DATABASE_CONNECTION_STRING, and JWT_SECRET_KEY. To use the UI, set DEVELOPMENT_ADMIN_ENABLED=true plus a local email and password. Then run:
 
-```dotenv
-POSTGRES_PASSWORD=<choose-a-local-database-password>
-DATABASE_CONNECTION_STRING=Host=database;Port=5432;Database=developer_evaluation;Username=developer;Password=<use-the-same-database-password>
-JWT_SECRET_KEY=<generate-a-random-value-with-at-least-32-bytes>
-DATABASE_PORT=5434
-API_PORT=5119
-FRONTEND_PORT=4200
-DEVELOPMENT_ADMIN_ENABLED=true
-DEVELOPMENT_ADMIN_EMAIL=admin@example.test
-DEVELOPMENT_ADMIN_PASSWORD=<choose-a-strong-local-admin-password>
-```
-
-`.env` is ignored by Git. Do not reuse these local credentials in another environment.
-
-Build and start the complete stack:
-
-```powershell
+~~~powershell
 docker compose up --detach --build --wait --wait-timeout 240
-docker compose ps
-```
+~~~
 
-Compose starts PostgreSQL, MongoDB, and Jaeger, runs the EF Core migration bundle once, waits for the API readiness probe, and then starts the Nginx-hosted Angular application. MongoDB audit availability is reported by the diagnostic health endpoint but does not block sales readiness; events remain durable in PostgreSQL while it is unavailable. OpenTelemetry traces are exported to Jaeger as described in the [observability guide](observability.md).
+| Resource | URL |
+|---|---|
+| Frontend | http://localhost:4200 |
+| API | http://localhost:5119 |
+| Swagger | http://localhost:5119/swagger |
+| Liveness / readiness | http://localhost:5119/health/live / http://localhost:5119/health/ready |
+| Jaeger | http://localhost:16686 |
 
-| Resource                 | URL                                  |
-| ------------------------ | ------------------------------------ |
-| Angular application      | `http://localhost:4200`              |
-| API                      | `http://localhost:5119`              |
-| Swagger UI               | `http://localhost:5119/swagger`      |
-| API liveness             | `http://localhost:5119/health/live`  |
-| API readiness            | `http://localhost:5119/health/ready` |
-| PostgreSQL from the host | `localhost:5434`                     |
-| MongoDB from the host    | `localhost:27018`                    |
-| Jaeger trace UI          | `http://localhost:16686`             |
-
-Sign in through the frontend with `DEVELOPMENT_ADMIN_EMAIL` and `DEVELOPMENT_ADMIN_PASSWORD` from the local `.env` file.
-
-Inspect logs when startup fails:
-
-```powershell
-docker compose ps --all
-docker compose logs migrations webapi frontend database audit-database telemetry
-```
-
-Stop the stack while retaining database data:
-
-```powershell
-docker compose down
-```
-
-Delete the local database volume only when a complete reset is intended:
-
-```powershell
-docker compose down --volumes --remove-orphans
-```
-
-## Local development and Rider
-
-Create the same `.env` file described above, then start both persistence services:
-
-```powershell
-docker compose up --detach database audit-database
-```
-
-Restore the .NET tools and configure secrets outside committed files:
-
-```powershell
-dotnet tool restore
-dotnet user-secrets set "Jwt:SecretKey" "<random-value-with-at-least-32-bytes>" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" `
-  "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "DevelopmentAdmin:Enabled" "true" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "DevelopmentAdmin:Email" "admin@example.test" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "DevelopmentAdmin:Password" "<strong-local-admin-password>" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "MongoAudit:Enabled" "true" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "MongoAudit:ConnectionString" "mongodb://localhost:27018" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-```
-
-Apply migrations. The design-time factory reads the explicit environment variable, while the running API reads User Secrets:
-
-```powershell
-$env:ConnectionStrings__DefaultConnection = "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>"
-dotnet tool run dotnet-ef database update `
-  --project src/backend/Ambev.DeveloperEvaluation.ORM `
-  --startup-project src/backend/Ambev.DeveloperEvaluation.WebApi
-Remove-Item Env:ConnectionStrings__DefaultConnection
-```
-
-Open `Ambev.DeveloperEvaluation.sln` in Rider, restore packages, select the WebApi `http` launch profile, and run it. The profile listens on `http://localhost:5119` and opens Swagger in Development.
-
-Start the Angular development server in a terminal:
-
-```powershell
-Set-Location src/frontend
-npm ci
-npm start
-```
-
-Open `http://localhost:4200`. The Angular development proxy forwards `/api` to `http://localhost:5119`.
-
-## Configuration reference
-
-| Setting                                | Purpose                                 | Delivery source                                                |
-| -------------------------------------- | --------------------------------------- | -------------------------------------------------------------- |
-| `ConnectionStrings__DefaultConnection` | PostgreSQL connection                   | `.env`, environment provider, or User Secrets                  |
-| `Jwt__SecretKey`                       | HMAC signing key, at least 32 bytes     | `.env`, environment provider, or User Secrets                  |
-| `Jwt__Issuer`                          | JWT issuer                              | committed non-secret default or environment override           |
-| `Jwt__Audience`                        | JWT audience                            | committed non-secret default or environment override           |
-| `Cors__AllowedOrigins__0`              | First permitted browser origin          | environment override; localhost is enabled only in Development |
-| `RefreshSession__IdleExpirationDays`   | Sliding refresh-session lifetime         | committed default or environment override                      |
-| `RefreshSession__AbsoluteExpirationDays` | Maximum refresh-session lifetime       | committed default or environment override                      |
-| `RefreshSession__CookieName`           | Refresh cookie name                      | `__Host-` name required when the secure cookie is enabled       |
-| `RefreshSession__SecureCookie`         | Requires HTTPS for the refresh cookie    | `true` by default; disabled only in Development                 |
-| `RefreshSession__CleanupRetentionDays` | Retention after absolute session expiry  | committed default or environment override                      |
-| `RefreshSession__CleanupIntervalMinutes` | Interval between cleanup cycles        | committed default or environment override                      |
-| `RefreshSession__CleanupBatchSize`     | Maximum rows removed per cleanup batch   | committed default or environment override                      |
-| `RefreshSession__CleanupMaxBatchesPerCycle` | Maximum batches per cleanup cycle   | committed default or environment override                      |
-| `DevelopmentAdmin__Enabled`            | Enables the idempotent development seed | local configuration only                                       |
-| `DevelopmentAdmin__Email`              | Seeded development account email        | local configuration only                                       |
-| `DevelopmentAdmin__Password`           | Seeded development account password     | local configuration only                                       |
-| `MongoAudit__Enabled`                  | Enables asynchronous audit delivery     | Compose or environment/User Secrets override                   |
-| `MongoAudit__ConnectionString`         | MongoDB audit connection                 | Compose or environment/User Secrets; secret manager in production |
-
-The development administrator is never seeded outside the Development environment. Production must inject all secrets through its secret manager and configure explicit CORS origins.
+A useful review path is: authenticate, create a four-unit line and confirm 10%, change it to ten units and confirm 20%, exercise list filters, open the same sale in two tabs to observe stale ETag handling, cancel an item, and soft-delete a disposable sale.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Browser[Angular client] -->|HTTPS / JSON| Proxy[Nginx or Angular dev proxy]
-    Proxy --> API[ASP.NET Core Web API]
-    API --> Auth[Short-lived JWT and rotating refresh sessions]
-    Auth --> PostgreSQL
-    API --> Mediator[MediatR commands and queries]
-    Mediator --> Domain[Sale aggregate and domain rules]
-    Mediator --> Repository[Repository and Unit of Work]
-    Repository --> EF[EF Core]
-    EF --> PostgreSQL[(PostgreSQL + transactional outbox)]
-    PostgreSQL --> Worker[Leased outbox worker]
-    Worker --> MongoDB[(MongoDB audit history)]
-```
+The HTTP and project dependency diagrams are in [project-structure.md](project-structure.md). PostgreSQL is the authoritative store. Sale changes and outbox messages commit atomically. The background processor leases pending messages, preserves per-aggregate order, retries with bounded backoff, writes MongoDB documents keyed by event ID, and then acknowledges delivery.
 
-| Layer       | Responsibility                                                                                                        |
-| ----------- | --------------------------------------------------------------------------------------------------------------------- |
-| Domain      | Sale invariants, discounts, totals, cancellation, versioning, and domain events                                       |
-| Application | Commands, queries, validators, handlers, ports, and result models                                                     |
-| ORM         | EF Core mappings, repositories, migrations, hashed refresh sessions, transactional outbox, leased worker, retries, and MongoDB audit persistence |
-| IoC         | Dependency registration, correlation IDs, and infrastructure bindings                                                 |
-| WebApi      | HTTP contracts, secure cookies, origin validation, authentication, authorization, ETags, rate limiting, and health probes |
-| Frontend    | Authentication, sales list/detail/editor flows, URL-backed filters, concurrency recovery, and accessible interactions |
+Administrator-only operations expose outbox backlog/dead-letter metadata and permit explicit replay. Event payloads are not returned by the operational endpoint.
 
-Sale changes and their outbox messages are committed atomically in PostgreSQL. A background worker claims the earliest event per aggregate with `FOR UPDATE SKIP LOCKED`, writes an idempotent audit document to MongoDB, and then marks the outbox row as processed. Failures use bounded exponential backoff and move to dead letter after the configured attempt limit. This provides at-least-once delivery without presenting MongoDB as the source of sale totals.
+## Authentication and security
 
-Administrators can inspect backlog and dead-letter metadata with `GET /api/operations/outbox` and replay a dead-letter event with `POST /api/operations/outbox/{eventId}/replay`. Event payloads are intentionally omitted from the operational response.
+- Authentication issues a 15-minute JWT and an opaque refresh token.
+- The frontend holds the JWT only in memory.
+- The refresh token is sent through an HttpOnly, SameSite=Strict cookie. Production enables Secure and requires the __Host- cookie name.
+- PostgreSQL stores the SHA-256 refresh-token hash, not the raw token.
+- Refresh rotates the session. Reuse outside the configured grace period revokes the token family.
+- Logout revokes the family and clears the cookie.
+- Login and session endpoints are rate-limited by remote address.
+- Cookie-backed auth endpoints validate a supplied Origin header against the request origin or configured CORS origins.
+- Sales require Manager or Admin; user administration and outbox operations require Admin.
+- Unknown JSON members and request bodies above 256 KiB are rejected; unexpected failures do not return stack traces.
 
-## Sales behavior at a glance
+These controls reduce token exposure and detect replay. Production still requires HTTPS, explicit trusted origins, externally managed secrets, and an appropriate operational security boundary.
 
-The API calculates every discount and monetary total. Clients send quantity and unit price only.
+## Testing
 
-| Quantity for one product | Discount |
-| -----------------------: | -------: |
-|                      1–3 |       0% |
-|                      4–9 |      10% |
-|                    10–20 |      20% |
-|                 Above 20 | Rejected |
+### Backend
 
-The main endpoints are:
+~~~powershell
+dotnet build Ambev.DeveloperEvaluation.sln -c Release
+dotnet test Ambev.DeveloperEvaluation.sln -c Release --no-build
+~~~
 
-| Method   | Route                                   | Purpose                                  |
-| -------- | --------------------------------------- | ---------------------------------------- |
-| `POST`   | `/api/auth`                             | Authenticate and obtain a JWT            |
-| `POST`   | `/api/auth/refresh`                     | Rotate the refresh session and obtain a new JWT |
-| `POST`   | `/api/auth/logout`                      | Revoke the refresh-token family and clear its cookie |
-| `GET`    | `/api/sales`                            | Filtered, ordered, paginated list        |
-| `POST`   | `/api/sales`                            | Create a sale                            |
-| `GET`    | `/api/sales/{id}`                       | Retrieve a sale and its `ETag`           |
-| `PUT`    | `/api/sales/{id}`                       | Update using the latest `If-Match` value |
-| `POST`   | `/api/sales/{id}/cancel`                | Cancel a sale using `If-Match`           |
-| `POST`   | `/api/sales/{id}/items/{itemId}/cancel` | Cancel one item using `If-Match`         |
-| `DELETE` | `/api/sales/{id}`                       | Soft-delete using `If-Match`             |
+- Unit tests isolate domain rules, handlers, mappings, and supporting services.
+- Integration tests use Testcontainers for PostgreSQL and MongoDB persistence, concurrency, outbox, and audit behavior.
+- Functional tests exercise the ASP.NET Core pipeline, validation, HTTP errors, auth, authorization, health, and controller contracts.
 
-Sales endpoints require a bearer token with the `Manager` or `Admin` role. Mutations of existing sales require the latest strong ETag. Missing ETags return `428`; stale ETags return `412` without overwriting another session.
+### Frontend
 
-Use these sources for full request and response details:
-
-- [sales-api.md](sales-api.md): business and HTTP decisions;
-- [openapi/sales.yaml](openapi/sales.yaml): OpenAPI contract;
-- [Ambev.DeveloperEvaluation.WebApi.http](../src/backend/Ambev.DeveloperEvaluation.WebApi/Ambev.DeveloperEvaluation.WebApi.http): runnable API examples;
-- [Postman reviewer workflow](postman/README.md): an ordered collection with automatic JWT, ID, and ETag handling;
-- Swagger UI in Development: interactive endpoint discovery.
-
-For a guided API demonstration, import [the Postman collection](postman/DeveloperStore-Sales.postman_collection.json) and [local environment template](postman/DeveloperStore-Local.postman_environment.json). Set the environment's secret `adminPassword` value and run the collection in order. The requests generate unique sale numbers, capture authentication and concurrency state automatically, and clean up their successful fixtures.
-
-The collection was also executed through Newman against a fresh disposable Compose stack: all 20 requests and 36 assertions passed, and the stack and its volumes were removed afterward.
-
-## Demonstration script
-
-This sequence demonstrates the business rules and the main engineering decisions in approximately ten minutes.
-
-1. Start the stack with `docker compose up --detach --build --wait --wait-timeout 240`.
-2. Open `http://localhost:4200` and sign in with the configured development administrator.
-3. Create a sale with a unique sale number, one customer snapshot, one branch snapshot, and four units of a BRL 10.00 product.
-4. Confirm a gross amount of BRL 40.00, a 10% discount, and a BRL 36.00 total in both the UI and detail response.
-5. Edit the same line to ten units. Confirm a 20% discount and a BRL 80.00 total.
-6. Open the sale in two browser tabs, save a change in the first tab, and then submit the stale form in the second. Confirm that the second draft is retained and the API returns the concurrency conflict instead of overwriting data.
-7. Cancel an item and confirm that its history remains visible while its effective amount becomes zero. Cancelling the final active item also cancels the sale.
-8. Return to the list and exercise sale-number, date, status, ordering, and page-size controls. Refresh the page to show that list state is encoded in the URL.
-9. Delete a disposable sale and confirm it disappears from public reads without removing its database history.
-10. Open `/health/live`, `/health/ready`, and `/health`. Use the administrator outbox endpoint to show an empty backlog and inspect the MongoDB `sale_events` audit collection.
-
-The deterministic Playwright suite automates these critical flows, including validation, idempotent cancellation, pagination correction, expired authentication, interrupted responses, keyboard use, mobile layout, and accessibility checks.
-
-## Test and quality commands
-
-Backend tests require a running Docker engine because the integration suite creates isolated PostgreSQL and MongoDB containers through Testcontainers:
-
-```powershell
-dotnet restore Ambev.DeveloperEvaluation.sln
-dotnet build Ambev.DeveloperEvaluation.sln --configuration Release --no-restore
-dotnet test Ambev.DeveloperEvaluation.sln `
-  --configuration Release `
-  --no-build `
-  --logger "trx" `
-  --settings .config/coverage.runsettings `
-  --collect "XPlat Code Coverage" `
-  --results-directory artifacts/backend
-```
-
-Run the frontend checks from `src/frontend`:
-
-```powershell
+~~~powershell
+Set-Location src/frontend
 npm ci
 npm run lint
 npx tsc -p tsconfig.app.json --noEmit
-npm run test:ci -- `
-  --coverage `
-  --coverage-reporters=cobertura `
-  --coverage-reporters=text-summary
+npm run test:ci -- --coverage
 npm run build
-```
+~~~
 
-Install Chromium once and run the isolated browser suite:
+Vitest and Angular TestBed cover services, guards, interceptors, forms, components, and templates.
 
-```powershell
-Set-Location src/frontend
+### Playwright E2E
+
+~~~powershell
 npm run test:e2e:install
 npm run test:e2e
-```
+~~~
 
-The E2E runner creates random credentials in memory, starts disposable API and PostgreSQL containers, runs Angular and Playwright, and removes its containers and volumes in a `finally` block. It does not depend on manual seed data. See [the E2E guide](../src/frontend/e2e/README.md) for running against an existing environment.
+The isolated runner generates credentials in memory, starts disposable PostgreSQL and API containers, launches Angular, runs the Chromium scenarios, and removes containers and volumes. The suite covers authentication/session restoration, lifecycle rules, concurrency, interrupted responses, accessibility, and telemetry. See [the E2E matrix](../src/frontend/e2e/README.md).
 
-## Continuous integration
+## CI pipeline
 
-The [GitHub Actions workflow](../.github/workflows/ci.yml) runs on every pull request and every push to `main`.
+.github/workflows/ci.yml runs on pull requests and pushes to main:
 
-| Job                    | Verification                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| Backend tests          | Restore, Release build, unit/integration/functional tests, TRX, and scoped Cobertura                  |
-| Frontend checks        | npm lockfile restore, lint, strict typecheck, unit tests, 90% coverage gate, and production build     |
-| Code coverage          | Publish separate backend/frontend reports and block below 90% lines or branches                       |
-| Isolated browser suite | Run 14 Playwright scenarios against real Angular, API, and PostgreSQL processes                                      |
-| Container stack smoke  | Build the production-like stack and verify health, auth, OTLP proxying, and a queryable Jaeger trace                  |
+| Job | Checks |
+|---|---|
+| Backend tests | Restore, vulnerable NuGet package audit, Release build, all .NET tests, Cobertura collection, TRX artifacts. |
+| Frontend checks | npm ci, ESLint, TypeScript typecheck, Vitest coverage/JUnit, production build. |
+| Code coverage | Independent ReportGenerator summaries and 90% line and branch gates for backend and frontend. |
+| Isolated browser suite | Chromium installation, Playwright E2E, JUnit and failure artifacts. |
+| Container stack smoke | Ephemeral credentials, Compose build/start, frontend, readiness, authentication, OTLP proxy, and queryable Jaeger trace. |
 
-### Recorded delivery evidence
+Artifacts are retained for seven days. New runs cancel older runs for the same branch. This is a CI pipeline; the repository does not deploy an environment.
 
-The table below is historical pre-T17 evidence from the clean GitHub-hosted run for merge commit `df4fadf` on September 25, 2026. It remains linked for traceability in [GitHub Actions run 36174441138](https://github.com/lauraizabel/OMINIA/actions/runs/36174441138).
+## API review resources
 
-| Suite                    |                                                                  Result |
-| ------------------------ | ----------------------------------------------------------------------: |
-| .NET unit                |                                                              134 passed |
-| .NET functional          |                                                               54 passed |
-| .NET integration         |                                                               20 passed |
-| Angular                  |                                                               46 passed |
-| Playwright               | 13 completed successfully; E10 passed on retry after one failed attempt |
-| Compose smoke            |                                                                  Passed |
-| Combined line coverage   |                                  71.5% — 3,284 of 4,591 coverable lines |
-| Combined branch coverage |                                           66.1% — 675 of 1,020 branches |
+- [Sales contract](sales-api.md)
+- [OpenAPI document](openapi/sales.yaml)
+- [Postman collection](postman/DeveloperStore-Sales.postman_collection.json) and [workflow](postman/README.md)
+- [Runnable HTTP requests](../src/backend/Ambev.DeveloperEvaluation.WebApi/Ambev.DeveloperEvaluation.WebApi.http)
+- Swagger UI in Development
 
-The T17 branch was then verified locally with 160 unit, 97 functional, 22 PostgreSQL integration, and 81 Angular tests. The independently merged reports measured **93.4% backend lines / 90.3% backend branches** and **95.2% frontend lines / 93.7% frontend branches**. The pull-request pipeline is the authoritative clean-environment confirmation for these gates.
+The Postman scripts authenticate and capture the JWT, generated sale IDs, item IDs, and ETags used by later requests.
 
-The T15 outbox extension was verified locally with **164 unit, 100 functional, and 33 PostgreSQL/MongoDB integration tests**. Backend coverage remained above its gate at **94.1% lines / 90.2% branches**. A disposable Compose stack created a sale through the authenticated API, delivered one audit document to MongoDB, drained the PostgreSQL outbox to zero pending events with zero dead letters, and reported overall health as `Healthy`.
+## Relevant decisions
 
-The T18 secure-session extension was verified locally with **165 unit, 125 functional, 40 integration, 84 Angular, and 13 Playwright tests**. Coverage remained above the independent gates at **94.6% backend lines / 90.2% backend branches** and **94.75% frontend lines / 93.29% frontend branches**. The production frontend image returned the configured CSP, HSTS, framing, MIME, referrer, permissions, COOP, and CORP headers. The browser suite proved login, cookie-backed reload restoration, refresh rotation, logout revocation, and a subsequent anonymous reload against disposable PostgreSQL and API containers. Integration coverage also verifies bounded retention cleanup without removing a family before its replay-detection window closes.
+- Sale owns its lines and all rules affecting totals or state.
+- Discounts and monetary totals are calculated server-side with decimal arithmetic and two-digit rounding.
+- Strong ETags and If-Match prevent silent last-write-wins updates.
+- Cancellation is an irreversible business transition; deletion is a separate tombstone operation.
+- List queries project only summary fields, use allowlisted ordering, and do not load item collections.
+- Mapperly generates compile-time mappings. AutoMapper was removed after a security advisory.
+- PostgreSQL outbox plus MongoDB audit avoids coupling a successful sale write to audit availability.
+- A broker and Redis are unnecessary for this single-service delivery; the outbox provides durable work and replay.
+- OpenTelemetry propagates W3C trace context through browser, API, PostgreSQL, outbound HTTP, and later outbox processing.
 
-The T16 tracing extension was verified locally with **167 unit, 130 functional, 40 integration, 89 Angular, and 14 Playwright tests**. Coverage remained above the independent gates at **94.5% backend lines / 90.1% backend branches** and **94.59% frontend lines / 92.35% frontend branches**. A clean Compose stack accepted OTLP through Nginx and exposed browser/API spans under one W3C trace in Jaeger 2.21; the stable v3 query API returned the stored trace summaries.
+## Known limitations
 
-Reports are retained as workflow artifacts for seven days. The pipeline measures backend and frontend separately and blocks either application below 90% line or branch coverage. Backend measurement excludes only EF migrations, generated code, the declarative host bootstrap, and the design-time context factory through [the committed run settings](../.config/coverage.runsettings). Frontend measurement includes application TypeScript and Angular templates except declarative route/bootstrap configuration and test files. The percentage complements the scenario matrix; it does not replace behavior-focused assertions. The E10 retry is also tracked as a stability gap rather than being hidden by the successful job status.
-
-## Design decisions
-
-- **Aggregate ownership:** `Sale` owns its lines and is the only entry point for changes that affect totals or state.
-- **External identities:** customer, branch, and product descriptions are stored as historical snapshots with their external IDs.
-- **Calculated data:** discounts, gross values, effective values, and totals are server-owned and cannot be supplied by clients.
-- **Money:** decimal arithmetic and two-digit rounding avoid binary floating-point errors.
-- **Concurrency:** strong ETags and `If-Match` prevent silent last-write-wins updates.
-- **Deletion:** delete is a tombstone operation; cancellation is a separate business transition.
-- **Query performance:** list queries project in PostgreSQL, use stable allowlisted ordering, and avoid loading item collections for pagination.
-- **Object mapping:** AutoMapper 13.0.1 was removed because of high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Riok.Mapperly 4.3.1 now generates strict, feature-local mappings at compile time, so no runtime mapper registration or reflection is required.
-- **Security:** sales require explicit roles, login and session endpoints are rate-limited, request bodies are capped at 256 KiB, unknown JSON members are rejected, and errors do not expose stack traces.
-- **Events:** sale events carry IDs, aggregate versions, timestamps, and correlation IDs. They are stored transactionally with the sale and delivered at least once to an idempotent MongoDB audit projection.
-- **Observability:** W3C trace context links sanitized browser request spans, ASP.NET Core, Npgsql, outbound HTTP, and later outbox delivery. Runtime switches keep telemetry disabled by default; Compose routes OTLP through same-origin Nginx to local Jaeger.
-- **Frontend session:** the 15-minute JWT remains in memory. The browser keeps only an opaque rotating refresh token in an `HttpOnly`, `SameSite=Strict` cookie, so JavaScript cannot read it. PostgreSQL stores its SHA-256 hash, rotation is serialized, replay outside the short concurrency grace period revokes the complete token family, and logout revokes that family before clearing the cookie. A bounded background cleanup retains every family until its absolute expiration plus the configured investigation period, then deletes the oldest records in indexed batches.
-- **Infrastructure scope:** PostgreSQL remains the source of truth. MongoDB stores the queryable audit projection; Redis and a message broker are not required for this single-service delivery.
-
-## Known limitations and production follow-ups
-
-- Audit delivery is eventually consistent and at least once. A crash after MongoDB accepts an event but before PostgreSQL records completion causes a safe idempotent replay. Exhausted retries remain visible as dead letters and require an administrator replay after the dependency is repaired.
-- Customer, branch, and product catalogs are represented only by external identity snapshots. Their source systems and lookup experiences are outside this repository.
-- Create operations do not implement persistent idempotency keys. The frontend avoids automatic retries for writes whose responses are interrupted.
-- The E10 interrupted-response scenario persists the server command independently before deterministically aborting the browser request. CI treats any test that needs a retry as a failure instead of masking flaky behavior.
-- The repository does not include cloud infrastructure, deployment automation, or a message broker. Its Jaeger topology provides reproducible local trace evidence; a production environment still needs an authenticated TLS collector, sampling, retention, and access policy.
+- Audit delivery is eventually consistent and at least once. Exhausted retries require an administrator replay after MongoDB is repaired.
+- Create operations do not support persistent idempotency keys; interrupted responses can leave the client uncertain whether the write committed.
+- External customer, branch, and product catalog services and lookup UIs are outside the challenge.
+- No cloud infrastructure, deployment automation, managed secret store, or external message broker is included.
+- Local Jaeger is reproducible review infrastructure, not a production observability topology.
 - Swagger is enabled only in Development.
-- Docker Desktop on Windows can fail to resolve paths containing decomposed Unicode characters. Use an ASCII-only checkout path such as `D:\work\ambev-evaluation`; the isolated E2E runner handles the current workspace with a temporary drive mapping.
 
-## Troubleshooting
+## Review checklist
 
-| Symptom                           | Resolution                                                                                                                                   |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL does not start         | Verify `POSTGRES_PASSWORD` is present and matches the password in `DATABASE_CONNECTION_STRING`; inspect `docker compose logs database`.      |
-| Migration container exits nonzero | Inspect `docker compose logs migrations`; verify the connection string uses host `database` and port `5432` inside Compose.                  |
-| API returns 503 or is not ready   | Check `docker compose ps`, `/health/ready`, and the PostgreSQL logs.                                                                         |
-| Audit backlog becomes degraded    | Check `/health`, `GET /api/operations/outbox`, and `audit-database` logs; repair MongoDB, then replay any dead letters.                      |
-| Login returns 401                 | Confirm the development seed is enabled and that the configured email and password match. Restart the API after changing seed configuration. |
-| Login returns 429                 | Wait for the one-minute development rate-limit window before trying again.                                                                   |
-| Sales return 403                  | Authenticate as a `Manager` or `Admin`; `Customer` is intentionally denied.                                                                  |
-| Mutation returns 428              | Read the sale first and send its current `ETag` in `If-Match`.                                                                               |
-| Mutation returns 412              | Refresh the sale and reconcile the retained draft with the latest server state.                                                              |
-| Angular reload returns to login   | Confirm the refresh cookie was accepted, the browser origin appears in `Cors__AllowedOrigins`, and HTTPS is used with the production `Secure` cookie. |
-| Testcontainers tests cannot start | Start Docker and confirm `docker version` succeeds in the same shell or IDE environment.                                                     |
-| A port is already in use          | Override `DATABASE_PORT`, `MONGODB_PORT`, `API_PORT`, or `FRONTEND_PORT` in the local `.env` file.                                           |
-
-## Delivery checklist
-
-Before publishing a release or submitting the repository:
-
-1. Start from a clean clone in an ASCII-only path.
-2. Create `.env` from `.env.example` without committing it.
-3. Run `docker compose up --detach --build --wait --wait-timeout 240`.
-4. Verify frontend login, sale creation, the 4-unit discount, update, cancellation, deletion, and health probes.
-5. Run backend, frontend, and isolated E2E test commands.
-6. Confirm the GitHub Actions backend, frontend, coverage, E2E, and Compose jobs are green.
-7. Confirm secret scanning does not report committed credentials.
-8. Run `docker compose down --volumes --remove-orphans` to remove delivery-test state.
-
-The repository is ready for review when a new evaluator can complete those steps using this document without unpublished credentials or manual database preparation.
+1. Start the stack from a clean checkout with local values in .env.
+2. Exercise the discount, concurrency, cancellation, and soft-delete flows.
+3. Run backend, frontend, and isolated E2E commands.
+4. Confirm Backend tests, Frontend checks, Code coverage, Isolated browser suite, Container stack smoke, and secret scanning are green.
+5. Confirm no real credentials were committed.
+6. Remove local state with docker compose down --volumes --remove-orphans when review is complete.

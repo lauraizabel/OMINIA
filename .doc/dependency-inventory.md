@@ -1,59 +1,34 @@
 [Back to README](../README.md)
 
-## Direct dependency inventory
+# Dependency and mapping decisions
 
-Package metadata was read from NuGet on September 25, 2026. Transitive packages remain governed by their own package metadata and lock resolution.
+Project files, package.json, package-lock.json, and Docker Compose are the version sources of truth. CI runs .config/audit-vulnerable-packages.ps1 against all .NET projects; the frontend lockfile provides the reproducible npm dependency graph.
 
-| Package | Version | Declared license |
-|---|---:|---|
-| BCrypt.Net-Next | 4.0.3 | License file |
-| Bogus | 35.6.1 | License URL |
-| coverlet.collector | 6.0.2 | MIT |
-| coverlet.msbuild | 6.0.2 | MIT |
-| FluentAssertions | 6.12.0 | Apache-2.0 |
-| FluentValidation | 11.10.0 | Apache-2.0 |
-| MediatR | 12.4.1 | Apache-2.0 |
-| Microsoft.AspNetCore.Authentication.JwtBearer | 8.0.10 | MIT |
-| Microsoft.EntityFrameworkCore | 8.0.10 | MIT |
-| Microsoft.EntityFrameworkCore.Design | 8.0.10 | MIT |
-| Microsoft.EntityFrameworkCore.Relational | 8.0.10 | MIT |
-| Microsoft.Extensions.Caching.Memory | 6.0.2 | MIT |
-| Microsoft.Extensions.DependencyInjection.Abstractions | 8.0.2 | MIT |
-| Microsoft.Extensions.Diagnostics.HealthChecks | 8.0.10 | MIT |
-| Microsoft.NET.Test.Sdk | 17.11.1 | MIT |
-| Microsoft.VisualStudio.Azure.Containers.Tools.Targets | 1.20.1 | Package EULA file |
-| Npgsql.EntityFrameworkCore.PostgreSQL | 8.0.8 | PostgreSQL |
-| NSubstitute | 5.1.0 | BSD-3-Clause |
-| OneOf | 3.0.271 | License URL |
-| OpenTelemetry.Exporter.OpenTelemetryProtocol | 1.16.0 | Apache-2.0 |
-| OpenTelemetry.Extensions.Hosting | 1.16.0 | Apache-2.0 |
-| OpenTelemetry.Instrumentation.AspNetCore | 1.16.0 | Apache-2.0 |
-| OpenTelemetry.Instrumentation.Http | 1.16.0 | Apache-2.0 |
-| Riok.Mapperly | 4.3.1 | Apache-2.0 |
-| Roslynator.Analyzers | 4.12.4 | Apache-2.0 |
-| Roslynator.Testing.CSharp.Xunit | 4.12.4 | Apache-2.0 |
-| Serilog.AspNetCore | 8.0.3 | Apache-2.0 |
-| Serilog.Enrichers.Environment | 3.0.1 | Apache-2.0 |
-| Serilog.Enrichers.ExceptionData | 1.0.0 | Apache-2.0 |
-| Serilog.Exceptions | 8.4.0 | MIT |
-| Serilog.Exceptions.EntityFrameworkCore | 8.4.0 | MIT |
-| Serilog.Expressions | 5.0.0 | Apache-2.0 |
-| Serilog.Sinks.Console | 6.0.0 | Apache-2.0 |
-| Swashbuckle.AspNetCore | 6.8.1 | MIT |
-| xunit | 2.9.2 | Apache-2.0 |
-| xunit.runner.visualstudio | 2.8.2 | Apache-2.0 |
+## Backend dependency groups
 
-### Vulnerability review
+| Function | Direct dependencies |
+|---|---|
+| Application flow | MediatR 12.4.1, FluentValidation 11.10.0, OneOf 3.0.271 |
+| Mapping | Riok.Mapperly 4.3.1 |
+| Relational persistence | EF Core 8.0.10, Npgsql EF Core 8.0.8 |
+| Audit persistence | MongoDB.Driver 3.12.0 |
+| Authentication and security | ASP.NET Core JwtBearer 8.0.10, BCrypt.Net-Next 4.0.3 |
+| Logging and tracing | Serilog 8 packages, OpenTelemetry 1.16 packages |
+| API discovery | Swashbuckle.AspNetCore 6.8.1 |
+| Tests | xUnit 2.9.2, NSubstitute 5.1.0, FluentAssertions 6.12.0, Bogus 35.6.1, Testcontainers PostgreSQL/MongoDB 4.15.0, Coverlet 6.0.2 |
 
-`.config/audit-vulnerable-packages.ps1` runs `dotnet list package --vulnerable --include-transitive --format json` for all nine .NET projects and reports no vulnerable packages. The same audit blocks CI regressions. The vulnerable transitive `Microsoft.Extensions.Caching.Memory 6.0.0` introduced by `Serilog.Exceptions.EntityFrameworkCore` remains overridden with patched version 6.0.2.
+Microsoft.Extensions.Caching.Memory is explicitly pinned to 6.0.2 to override the vulnerable transitive 6.0.0 version introduced by Serilog.Exceptions.EntityFrameworkCore.
 
-### Mapping library decision
+## Frontend dependency groups
 
-AutoMapper 13.0.1 was removed because it is affected by the high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Fixed AutoMapper versions start at 15.1.1 and belong to the newer commercial-license line, so the project migrated to the Apache-2.0-licensed Riok.Mapperly 4.3.1 instead.
+Angular 22.2, RxJS 7.8, and TypeScript 6 implement the application. Vitest 5 and Angular TestBed provide unit/component tests, Playwright 1.55 provides E2E coverage, and angular-eslint/ESLint provide static checks. OpenTelemetry browser packages export sanitized traces through the same-origin frontend proxy.
 
-Mapperly generates the feature-local mappings at compile time. This keeps mapping definitions explicit and compiler-checked without a runtime mapper service or reflection. The package is referenced with `PrivateAssets="all"` and `ExcludeAssets="runtime"` because only its source generator and annotations are needed during compilation.
+## Why Mapperly replaced AutoMapper
 
-### Browser telemetry and local trace backend
+AutoMapper 13.0.1 was removed after high-severity advisory [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Fixed AutoMapper releases start in the newer commercial-license line. The repository therefore uses Apache-2.0-licensed Riok.Mapperly 4.3.1.
 
-The Angular application directly references `@opentelemetry/api` 1.9.0, the 2.11.0 browser tracing SDK packages, OTLP HTTP exporter 0.222.0, and semantic conventions 1.43.0. Their package metadata declares Apache-2.0 licenses. Compose pins the all-in-one Jaeger image to `2.21.0`. See the [observability guide](observability.md) for the trust boundary and production requirements.
+Mapperly generates feature-local mappings at compile time. Mapping failures surface during build, no runtime mapper service or reflection is required, and each feature keeps its mapping boundary explicit. The package uses PrivateAssets=all and ExcludeAssets=runtime because only its source generator and annotations are needed.
 
+## Infrastructure images
+
+Docker Compose pins PostgreSQL 16.15-alpine, MongoDB 8.0.15, and Jaeger 2.21.0. These images support local review; a production environment must define its own patching, registry, retention, TLS, and access-control policies.

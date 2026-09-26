@@ -32,8 +32,6 @@ The scripts manage all runtime state:
 - the concurrency scenario preserves one stale ETag while tracking the current ETag;
 - successful lifecycle and concurrency fixtures are soft-deleted by their cleanup requests.
 
-The exported workflow was validated against a fresh disposable Compose stack on September 25, 2026: 20 requests and 36 assertions completed with zero failures.
-
 The exported collection and environment contain no password or token. Avoid exporting the environment after entering local credentials unless current values are removed first.
 
 ## Command-line execution

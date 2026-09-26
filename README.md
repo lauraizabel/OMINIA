@@ -1,148 +1,129 @@
-# Developer Evaluation Project
+# DeveloperStore Sales Evaluation
 
-`READ CAREFULLY`
+## Challenge / Requirements
 
-## Instructions
-**The test below will have up to 7 calendar days to be delivered from the date of receipt of this manual.**
+This repository implements the Ambev Developer Evaluation sales challenge. The original delivery requirements are:
 
-- The code must be versioned in a public Github repository and a link must be sent for evaluation once completed
-- Upload this template to your repository and start working from it
-- Read the instructions carefully and make sure all requirements are being addressed
-- The repository must provide instructions on how to configure, execute and test the project
-- Documentation and overall organization will also be taken into consideration
+- deliver the solution within seven calendar days;
+- publish the source in a public GitHub repository;
+- provide instructions to configure, run, and test the project;
+- implement a complete sales CRUD API using DDD-inspired boundaries and external identity snapshots.
 
-## Use Case
-**You are a developer on the DeveloperStore team. Now we need to implement the API prototypes.**
+A sale must expose its number, date, customer, branch, products, quantities, unit prices, discounts, line totals, sale total, and cancellation state. Publishing SaleCreated, SaleModified, SaleCancelled, and ItemCancelled events is an optional differential; no external message broker is required.
 
-As we work with `DDD`, to reference entities from other domains, we use the `External Identities` pattern with denormalization of entity descriptions.
+### Business rules
 
-Therefore, you will write an API (complete CRUD) that handles sales records. The API needs to be able to inform:
+- 1-3 identical items receive no discount.
+- 4-9 identical items receive a 10% discount.
+- 10-20 identical items receive a 20% discount.
+- More than 20 identical items is rejected.
 
-* Sale number
-* Date when the sale was made
-* Customer
-* Total sale amount
-* Branch where the sale was made
-* Products
-* Quantities
-* Unit prices
-* Discounts
-* Total amount for each item
-* Cancelled/Not Cancelled
+The challenge text says both "above 4" and "4+". This implementation follows the explicit tier table: exactly four units receive 10%. The full contract is in [Sales API contract](.doc/sales-api.md).
 
-It's not mandatory, but it would be a differential to build code for publishing events of:
-* SaleCreated
-* SaleModified
-* SaleCancelled
-* ItemCancelled
+## Engineering Highlights
 
-If you write the code, **it's not required** to actually publish to any Message Broker. You can log a message in the application log or however you find most convenient.
+- Layered, DDD-inspired backend with business invariants enforced by the Sale aggregate.
+- MediatR commands and queries with FluentValidation pipeline behavior.
+- PostgreSQL and EF Core persistence with stable projected list queries.
+- Strong ETags and If-Match optimistic concurrency for sale mutations.
+- Soft deletion and explicit sale/item cancellation semantics.
+- Transactional PostgreSQL outbox and idempotent MongoDB audit projection.
+- Mapperly compile-time mappings; no runtime reflection-based mapper.
+- Short-lived JWTs and rotating refresh sessions in HttpOnly cookies.
+- Angular workflow with in-memory access tokens and session restoration.
+- Unit, integration, functional/API, Angular, and Playwright E2E tests.
+- Docker Compose, OpenAPI, Postman, OpenTelemetry/Jaeger, and GitHub Actions CI.
+- Independent backend and frontend line/branch coverage gates of 90%.
 
-### Business Rules
+## Architecture
 
-* Purchases above 4 identical items have a 10% discount
-* Purchases between 10 and 20 identical items have a 20% discount
-* It's not possible to sell above 20 identical items
-* Purchases below 4 items cannot have a discount
+The main request flow is WebApi to Application to Domain, with the ORM implementing persistence and application ports. PostgreSQL is the source of truth. Sale events are committed to the outbox with aggregate changes and later projected into MongoDB by a background worker.
 
-These business rules define quantity-based discounting tiers and limitations:
+See [Project structure](.doc/project-structure.md) for dependency boundaries and diagrams, and [Setup and delivery](.doc/setup-and-delivery.md) for the reviewer workflow.
 
-1. Discount Tiers:
-   - 4+ items: 10% discount
-   - 10-20 items: 20% discount
+## Quick Start
 
-2. Restrictions:
-   - Maximum limit: 20 items per product
-   - No discounts allowed for quantities below 4 items
+Requirements: Docker Engine or Docker Desktop with Docker Compose v2.
 
-## Overview
-This section provides a high-level overview of the project and the various skills and competencies it aims to assess for developer candidates. 
-
-See [Overview](/.doc/overview.md)
-
-## Tech Stack
-This section lists the key technologies used in the project, including the backend, testing, frontend, and database components. 
-
-See [Tech Stack](/.doc/tech-stack.md)
-
-## Frameworks
-This section outlines the frameworks and libraries that are leveraged in the project to enhance development productivity and maintainability. 
-
-See [Frameworks](/.doc/frameworks.md)
-
-<!-- 
-## API Structure
-This section includes links to the detailed documentation for the different API resources:
-- [API General](./docs/general-api.md)
-- [Products API](/.doc/products-api.md)
-- [Carts API](/.doc/carts-api.md)
-- [Users API](/.doc/users-api.md)
-- [Auth API](/.doc/auth-api.md)
--->
-
-## Project Structure
-This section describes the overall structure and organization of the project files and directories. 
-
-See [Project Structure](/.doc/project-structure.md)
-
-## Development setup
-
-See [Development setup](/.doc/development-setup.md) for local secrets, database migrations, Docker Compose, and the optional development administrator.
-
-The complete reviewer workflow, architecture, demonstration script, validation evidence, and known limitations are available in the [Setup and delivery guide](/.doc/setup-and-delivery.md).
-
-## Run the complete application
-
-Create `.env` from `.env.example`, provide the required local credentials, and start the complete stack:
-
-```powershell
+~~~powershell
 Copy-Item .env.example .env
+~~~
+
+Set POSTGRES_PASSWORD, DATABASE_CONNECTION_STRING, and JWT_SECRET_KEY in .env. To sign in through the UI, also enable and configure the development administrator. The database password in both PostgreSQL settings must match, and the JWT key must contain at least 32 bytes.
+
+~~~powershell
 docker compose up --detach --build --wait --wait-timeout 240
-```
+~~~
 
-Open the frontend at `http://localhost:4200`. The API and Swagger are available at `http://localhost:5119` and `http://localhost:5119/swagger`. Jaeger is available at `http://localhost:16686`; see the [distributed tracing guide](/.doc/observability.md) for configuration, privacy rules, and a trace walkthrough.
+Use docker compose down to stop the stack, or add --volumes only when a full local reset is intended. Rider, migration, User Secrets, and troubleshooting instructions are in [Development setup](.doc/development-setup.md).
 
-## Frontend development and tests
+## Main URLs
 
-Start the API first, then run the Angular development server:
+| Resource | URL |
+|---|---|
+| Angular application | http://localhost:4200 |
+| API | http://localhost:5119 |
+| Swagger UI | http://localhost:5119/swagger |
+| Liveness | http://localhost:5119/health/live |
+| Readiness | http://localhost:5119/health/ready |
+| Jaeger | http://localhost:16686 |
 
-```powershell
+## Testing
+
+Backend build and all .NET test projects:
+
+~~~powershell
+dotnet build Ambev.DeveloperEvaluation.sln -c Release
+dotnet test Ambev.DeveloperEvaluation.sln -c Release --no-build
+~~~
+
+Frontend lint, typecheck, unit tests with coverage, and production build:
+
+~~~powershell
 Set-Location src/frontend
 npm ci
-npm start
-```
-
-Run the frontend quality checks and unit tests from `src/frontend`:
-
-```powershell
 npm run lint
 npx tsc -p tsconfig.app.json --noEmit
-npm run test:ci -- --coverage --coverage-reporters=text-summary
+npm run test:ci -- --coverage
 npm run build
-```
+~~~
 
-The frontend test command enforces at least 90% line and branch coverage. Backend coverage uses `.config/coverage.runsettings`; CI merges the three .NET test reports and applies the same independent 90% line and branch gate.
+Playwright starts disposable PostgreSQL and API containers and removes them afterward. Docker must be available:
 
-## End-to-end tests
-
-The Playwright suite starts disposable API and PostgreSQL containers, generates credentials in memory, runs the Angular application, and removes its containers and volumes afterward. Docker must be running.
-
-```powershell
-Set-Location src/frontend
-npm ci
+~~~powershell
 npm run test:e2e:install
 npm run test:e2e
-```
+~~~
 
-See the [browser integration test guide](/src/frontend/e2e/README.md) for the covered scenarios and instructions for testing an existing environment.
+Unit tests verify isolated rules and handlers; integration tests exercise PostgreSQL, MongoDB, and infrastructure behavior; functional tests validate HTTP/security behavior; Playwright verifies the browser-to-API workflow. See [Setup and delivery](.doc/setup-and-delivery.md#testing) and the [E2E guide](src/frontend/e2e/README.md).
 
-## Postman collection
+## Documentation
 
-Import the following files into Postman:
+| Document | Purpose |
+|---|---|
+| [Overview](.doc/overview.md) | Delivered scope and review path |
+| [Project structure](.doc/project-structure.md) | Layer responsibilities and dependency flow |
+| [Technology stack](.doc/tech-stack.md) | Runtime and platform inventory |
+| [Frameworks and libraries](.doc/frameworks.md) | Libraries grouped by responsibility |
+| [Development setup](.doc/development-setup.md) | Local, Rider, Docker, migrations, and configuration |
+| [Setup and delivery](.doc/setup-and-delivery.md) | Reviewer workflow, testing, CI, security, and limitations |
+| [Sales API contract](.doc/sales-api.md) | Business rules, HTTP contract, concurrency, and errors |
+| [OpenAPI](.doc/openapi/sales.yaml) | Machine-readable sales contract |
+| [Postman workflow](.doc/postman/README.md) | Ordered authenticated API walkthrough |
+| [Observability](.doc/observability.md) | OpenTelemetry and Jaeger flow |
+| [Frontend](src/frontend/README.md) | Angular development and authentication behavior |
 
-- [DeveloperStore Sales API collection](/.doc/postman/DeveloperStore-Sales.postman_collection.json)
-- [DeveloperStore local environment](/.doc/postman/DeveloperStore-Local.postman_environment.json)
+## Relevant Technical Decisions
 
-Select the **DeveloperStore — Local** environment and set its secret `adminPassword` value to the development administrator password configured in `.env`. Run the collection in order. Its scripts authenticate automatically and capture the JWT, generated sale IDs, item IDs, and ETags required by later requests.
+- PostgreSQL remains the source of truth; MongoDB stores the eventually consistent audit projection.
+- The outbox is transactional and delivered at least once. MongoDB uses the event ID for idempotent writes.
+- Access tokens are kept only in frontend memory. The opaque refresh token is stored in an HttpOnly, SameSite=Strict cookie and its hash is persisted.
+- Refresh rotation detects replay outside a short concurrency grace period and revokes the token family.
+- Sale updates use strong ETags to prevent silent last-write-wins behavior.
+- Customer, branch, and product data are external identity snapshots; catalog services are outside the challenge scope.
+- AutoMapper was replaced by Mapperly after a security advisory; the rationale is in [Dependency inventory](.doc/dependency-inventory.md).
+- This repository provides a CI pipeline and reproducible local stack. It does not contain deployment automation or cloud infrastructure.
 
-See the [Postman reviewer workflow](/.doc/postman/README.md) for folder descriptions, automatic variable behavior, cleanup details, and Newman execution.
+## Postman
+
+Import the [collection](.doc/postman/DeveloperStore-Sales.postman_collection.json) and [local environment](.doc/postman/DeveloperStore-Local.postman_environment.json), select DeveloperStore - Local, and set the secret adminPassword value. The collection captures the JWT, sale IDs, item IDs, and ETags automatically.

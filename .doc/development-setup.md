@@ -2,102 +2,122 @@
 
 # Development setup
 
-For the complete reviewer workflow, architecture, demonstration script, validation evidence, and known limitations, see [Setup and delivery guide](setup-and-delivery.md).
+Use [Setup and delivery](setup-and-delivery.md) for the reviewer checklist, test layers, CI jobs, security model, and known limitations. This document focuses on local execution.
 
-The API requires a JWT signing key with at least 32 bytes. Keep this key outside committed configuration.
+## Prerequisites
 
-## Rider or `dotnet run`
+Containerized execution requires Git and Docker Compose v2. Direct local development additionally requires:
 
-Configure the signing key in .NET User Secrets:
+- .NET SDK 8.0.416, pinned by global.json;
+- Node.js >=22.22.3 <23;
+- npm >=10 <11;
+- the local EF Core tool restored from .config/dotnet-tools.json.
 
-```powershell
-dotnet user-secrets set "Jwt:SecretKey" "replace-with-a-random-secret-containing-at-least-32-characters" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" `
-  "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>" `
-  --project src/backend/Ambev.DeveloperEvaluation.WebApi
-```
+## Complete stack with Docker Compose
 
-Apply migrations and start the API:
+Copy the environment template and provide local-only values:
 
-```powershell
+~~~powershell
+Copy-Item .env.example .env
+~~~
+
+Required values:
+
+~~~dotenv
+POSTGRES_PASSWORD=<local-database-password>
+DATABASE_CONNECTION_STRING=Host=database;Port=5432;Database=developer_evaluation;Username=developer;Password=<same-local-database-password>
+JWT_SECRET_KEY=<random-value-containing-at-least-32-bytes>
+~~~
+
+To authenticate in the browser, enable the optional Development-only administrator:
+
+~~~dotenv
+DEVELOPMENT_ADMIN_ENABLED=true
+DEVELOPMENT_ADMIN_EMAIL=admin@example.test
+DEVELOPMENT_ADMIN_PASSWORD=<strong-local-password>
+~~~
+
+.env is ignored by Git. Start the stack:
+
+~~~powershell
+docker compose up --detach --build --wait --wait-timeout 240
+docker compose ps
+~~~
+
+Compose starts PostgreSQL, MongoDB, Jaeger, the migration bundle, API, and Nginx-hosted Angular application. Stop it with docker compose down. Add --volumes only for an intentional data reset.
+
+| Service | Host address |
+|---|---|
+| Frontend | http://localhost:4200 |
+| API / Swagger | http://localhost:5119 / http://localhost:5119/swagger |
+| PostgreSQL | localhost:5434 |
+| MongoDB | localhost:27018 |
+| Jaeger | http://localhost:16686 |
+
+The ports can be overridden through the matching variables in .env.example.
+
+## Rider or dotnet run
+
+Start the persistence dependencies:
+
+~~~powershell
+docker compose up --detach database audit-database
 dotnet tool restore
+~~~
+
+Configure secrets outside committed files:
+
+~~~powershell
+dotnet user-secrets set "Jwt:SecretKey" "<random-value-containing-at-least-32-bytes>" --project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>" --project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet user-secrets set "MongoAudit:Enabled" "true" --project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet user-secrets set "MongoAudit:ConnectionString" "mongodb://localhost:27018" --project src/backend/Ambev.DeveloperEvaluation.WebApi
+~~~
+
+Configure DevelopmentAdmin values through User Secrets when a UI account is needed. The seed is disabled by default, idempotent by normalized email, and cannot run outside Development.
+
+Apply migrations:
+
+~~~powershell
 $env:ConnectionStrings__DefaultConnection = "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>"
-dotnet tool run dotnet-ef database update `
-  --project src/backend/Ambev.DeveloperEvaluation.ORM `
-  --startup-project src/backend/Ambev.DeveloperEvaluation.WebApi
+dotnet tool run dotnet-ef database update --project src/backend/Ambev.DeveloperEvaluation.ORM --startup-project src/backend/Ambev.DeveloperEvaluation.WebApi
 Remove-Item Env:ConnectionStrings__DefaultConnection
+~~~
+
+Open Ambev.DeveloperEvaluation.sln in Rider and select the WebApi http profile, or run:
+
+~~~powershell
 dotnet run --project src/backend/Ambev.DeveloperEvaluation.WebApi
-```
+~~~
 
-The explicit environment variable is used only by the EF design-time factory. Runtime configuration continues to come from User Secrets.
-
-The Rider launch profile uses `http://localhost:5119`. PostgreSQL from Docker Compose is exposed on host port `5434`.
+Both paths use http://localhost:5119 in Development.
 
 ## Angular frontend
 
-The frontend requires Node.js `22.22.3` or later in the Node 22 release line and npm 10. Start the API first, then run:
+Start the API first, then:
 
-```powershell
-cd src/frontend
+~~~powershell
+Set-Location src/frontend
 npm ci
 npm start
-```
+~~~
 
-Open `http://localhost:4200`. The development server proxies `/api` to `http://localhost:5119`. The short-lived access token remains in memory and is never written to browser storage. A rotating refresh token in an `HttpOnly` cookie restores the session after a page reload, and the original internal deep link is preserved.
+Open http://localhost:4200. The development proxy forwards /api to http://localhost:5119.
 
-Run the frontend checks with:
+The access token remains only in Angular memory. On application startup the frontend calls the refresh endpoint with credentials; a valid rotating HttpOnly refresh cookie restores the session after reload. Guards preserve a safe internal return URL for post-login navigation.
 
-```powershell
-npm run test:ci
-npm run build
-```
+## Health checks
 
-Health probes are available without authentication:
+- /health/live checks the process without requiring PostgreSQL.
+- /health/ready checks PostgreSQL and returns 503 while it is unavailable.
+- /health includes diagnostic checks such as audit/outbox health.
 
-- `/health/live` checks whether the API process can respond and does not depend on PostgreSQL.
-- `/health/ready` checks PostgreSQL connectivity and returns `503 Service Unavailable` while the database is unavailable.
-- `/health` reports both checks.
+MongoDB audit failure does not invalidate a committed sale; the PostgreSQL outbox retains pending work.
 
-## Optional development administrator
+## Production configuration
 
-The development-only seed is disabled by default and never runs in other environments. Enable it through User Secrets when a local administrator is needed:
+Production must provide Jwt__SecretKey, Jwt__Issuer, Jwt__Audience, the PostgreSQL connection string, and explicit Cors__AllowedOrigins through its configuration or secret provider. HTTPS is required for the default __Host- refresh cookie.
 
-```powershell
-dotnet user-secrets set "DevelopmentAdmin:Enabled" "true" --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "DevelopmentAdmin:Email" "admin@example.com" --project src/backend/Ambev.DeveloperEvaluation.WebApi
-dotnet user-secrets set "DevelopmentAdmin:Password" "choose-a-strong-local-password" --project src/backend/Ambev.DeveloperEvaluation.WebApi
-```
+Production refresh cookies are Secure, HttpOnly, SameSite=Strict, use Path=/, and carry the __Host- prefix. Startup validation rejects invalid JWT and cookie settings. Swagger and the development administrator remain Development-only.
 
-The seed is idempotent by normalized email. It applies pending migrations and creates the administrator only when the configured email does not exist.
-
-## Docker Compose
-
-Copy `.env.example` to `.env` and provide local-only values. `POSTGRES_PASSWORD` and the password inside `DATABASE_CONNECTION_STRING` must match; `JWT_SECRET_KEY` must contain at least 32 bytes. Optionally enable the development administrator for UI authentication. The resulting file resembles:
-
-```dotenv
-POSTGRES_PASSWORD=<local-database-password>
-DATABASE_CONNECTION_STRING=Host=database;Port=5432;Database=developer_evaluation;Username=developer;Password=<same-local-database-password>
-JWT_SECRET_KEY=<random-key-with-at-least-32-bytes>
-DEVELOPMENT_ADMIN_ENABLED=true
-DEVELOPMENT_ADMIN_EMAIL=admin@example.test
-DEVELOPMENT_ADMIN_PASSWORD=<strong-local-admin-password>
-```
-
-Start the complete stack:
-
-```powershell
-docker compose up --detach --build
-```
-
-The migration container must finish successfully before the API starts. Compose then waits for PostgreSQL, API, and frontend health checks. Open `http://localhost:4200`; API and Swagger remain available at `http://localhost:5119` and `http://localhost:5119/swagger`. Jaeger is available at `http://localhost:16686`; the [observability guide](observability.md) explains how to query a trace and how telemetry is sanitized.
-
-Stop the stack while preserving PostgreSQL data with `docker compose down`. Add `--volumes` when an explicit database reset is intended.
-
-On Windows, Docker may fail to resolve a workspace whose path contains decomposed Unicode characters. Cloning into a regular ASCII path avoids the Docker limitation; the isolated E2E runner handles the current workspace automatically.
-
-## Continuous integration
-
-`.github/workflows/ci.yml` runs backend tests with PostgreSQL Testcontainers, frontend lint/typecheck/tests/build, the isolated Playwright suite, and a complete Compose smoke test. The smoke job also verifies the same-origin OTLP proxy and waits for an API trace to become queryable in Jaeger. A dedicated job merges backend and frontend Cobertura data into a code-coverage summary displayed in the workflow run. Test results, combined coverage, and browser artifacts are retained for seven days. Pull-request runs are cancelled when a newer commit supersedes them.
-
-Production must supply `Jwt__SecretKey`, `Jwt__Issuer`, and `Jwt__Audience` from its secret/configuration provider. It must also expose the application over HTTPS and configure each public browser origin through `Cors__AllowedOrigins`. Production refresh cookies are `Secure`, `HttpOnly`, `SameSite=Strict`, use `Path=/`, and carry the `__Host-` prefix. The application fails during startup when JWT or refresh-cookie configuration is invalid.
+On Windows, Docker can fail to resolve a checkout path containing decomposed Unicode characters. An ASCII-only checkout path avoids that engine limitation; the isolated E2E runner maps the current workspace automatically.

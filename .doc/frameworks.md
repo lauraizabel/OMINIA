@@ -1,32 +1,34 @@
 [Back to README](../README.md)
 
-## Frameworks
-Our frameworks are the building blocks that enable us to create robust, efficient, and maintainable software solutions. They have been carefully selected to complement our tech stack and address specific development challenges we face in our projects.
+# Frameworks and libraries
 
-These frameworks enhance our development process by providing tried-and-tested solutions to common problems, allowing our team to focus on building unique features and business logic. Each framework has been chosen for its ability to integrate seamlessly with our tech stack, its community support, and its alignment with our development principles.
+Only libraries used by the current implementation are listed.
 
-We use the following frameworks in this project:
+## Backend
 
-Backend:
-- **Mediator**: A behavioral design pattern that helps reduce chaotic dependencies between objects. It allows loose coupling by encapsulating object interaction.
-  - Git: https://github.com/jbogard/MediatR
-- **Automapper**: A convention-based object-object mapper that simplifies the process of mapping one object to another.
-  - Git: https://github.com/AutoMapper/AutoMapper
-- **Rebus**: A lean service bus implementation for .NET, providing a simple and flexible way to do messaging and queueing in .NET applications.
-  - Git: https://github.com/rebus-org/Rebus
+| Library | Role |
+|---|---|
+| ASP.NET Core | HTTP hosting, controllers, JWT authentication, authorization, rate limiting, health checks, and middleware. |
+| MediatR | Dispatches commands and queries and hosts the request validation behavior. |
+| FluentValidation | Validates application commands and selected HTTP request models. |
+| Mapperly | Generates feature-local mappings at compile time. It replaced AutoMapper; no runtime mapper registration is required. |
+| Entity Framework Core / Npgsql | PostgreSQL mappings, migrations, transactions, concurrency, projections, and repositories. |
+| MongoDB.Driver | Writes and queries the idempotent sale-event audit projection. |
+| BCrypt.Net-Next | Hashes user passwords. |
+| Serilog | Structured logging and exception enrichment. |
+| OpenTelemetry | Traces ASP.NET Core, HTTP, PostgreSQL, frontend requests, and outbox delivery. |
+| Swashbuckle | Generates Swagger/OpenAPI discovery in Development. |
 
-Testing:
-- **Faker**: A library for generating fake data for testing purposes, allowing for more realistic and diverse test scenarios.
-  - Git: https://github.com/bchavez/Bogus
-- **NSubstitute**: A friendly substitute for .NET mocking libraries, used for creating test doubles in unit testing.
-  - Git: https://github.com/nsubstitute/NSubstitute
+No service-bus framework is installed. Event delivery uses the PostgreSQL outbox worker; Rebus is not part of the implementation.
 
-Database:
-- **EF Core**: Entity Framework Core, a lightweight, extensible, and cross-platform version of Entity Framework, used for data access and object-relational mapping.
-  - Git: https://github.com/dotnet/efcore
+## Testing
 
-<br>
-<div style="display: flex; justify-content: space-between;">
-  <a href="./tech-stack.md">Previous: Tech Stack</a>
-  <a href="./general-api.md">Next: General API</a>
-</div>
+| Library | Role |
+|---|---|
+| xUnit | Backend unit, integration, and functional test runner. |
+| NSubstitute | Test doubles for isolated backend tests. |
+| FluentAssertions | Readable assertions in unit tests. |
+| Bogus | Test-data generation where varied data is useful. |
+| Testcontainers | Disposable PostgreSQL and MongoDB integration dependencies. |
+| Vitest and Angular TestBed | Frontend unit and component tests. |
+| Playwright | Chromium browser E2E, accessibility, concurrency, and resilience scenarios. |
