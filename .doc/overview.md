@@ -1,36 +1,28 @@
 [Back to README](../README.md)
 
-## Overview
-This project serves as an evaluation for senior developer candidates. It is designed to assess various skills and competencies required for a senior developer role, including but not limited to:
+# Overview
 
-1. Proficiency in C# and .NET 8.0 development
-2. Project Layer Separation
-3. Database skills with both PostgreSQL and MongoDB
-4. Understanding and implementation of design patterns (e.g., Mediator pattern)
-5. Ability to work with object-relational mapping tools (EF Core)
-6. Proficiency in writing and maintaining unit tests using xUnit
-7. Experience with mocking frameworks like NSubstitute
-8. Familiarity with object mapping libraries such as AutoMapper
-9. API design and RESTful service implementation
-10. Version control with Git 
-11. Understanding of both relational and non relational database systems
-12. Data generation and management for testing purposes (using Faker)
-13. Code organization and project structure
-14. Implementation of pagination, filtering, and sorting in APIs
-15. Error handling and API response formatting
-16. Use of Git Flow and Semantic Commits
-17. Performance optimization for database queries and API responses
-18. Understanding of asynchronous programming patterns
-19. Code quality and adherence to best practices
-20. Problem-solving and analytical skills
-21. Attention to detail in implementing business logic
-22. Ability to work with and integrate multiple technologies and frameworks
+This repository delivers the DeveloperStore sales challenge as a complete backend and browser workflow. The code is organized around a Sale aggregate that owns discounts, totals, cancellation, deletion state, optimistic versioning, and domain events.
 
+## Delivered scope
 
-This comprehensive evaluation aims to assess both the technical proficiency and the broader software engineering skills necessary for a senior developer role.
+- **Layered architecture:** HTTP concerns, use-case orchestration, domain rules, and persistence are kept in separate projects with explicit references.
+- **Domain modeling:** the Sale aggregate owns discounts, totals, snapshots, cancellation, soft deletion, versions, and domain events.
+- **Validation:** FluentValidation runs application validators through the MediatR pipeline; the domain independently protects its invariants.
+- **Concurrency:** strong ETags and `If-Match` reject stale sale mutations instead of silently overwriting them.
+- **Persistence and events:** EF Core persists authoritative state and the transactional outbox in PostgreSQL; a background processor writes an idempotent MongoDB audit projection.
+- **Authentication and security:** short-lived JWTs, rotating `HttpOnly` refresh sessions, role policies, origin checks, rate limits, and bounded request bodies protect the HTTP surface.
+- **Testing:** unit, PostgreSQL/MongoDB integration, functional/API, Angular, and Playwright suites cover the main boundaries.
+- **Observability:** OpenTelemetry correlates browser, API, PostgreSQL, HTTP, and outbox activity, with Jaeger included for local trace review.
 
-<br/>
-<div style="display: flex; justify-content: space-between;">
-  <a href="../README.md">Previous: Read Me</a>
-  <a href="./tech-stack.md">Next: Tech Stack</a>
-</div>
+External customer, branch, and product systems are represented by ID/name snapshots. PostgreSQL owns sale state and totals; MongoDB stores audit history produced asynchronously from domain events.
+
+## Suggested review path
+
+1. Read the [root README](../README.md) for requirements and quick start.
+2. Review [project structure](project-structure.md) for dependencies and event flow.
+3. Use [sales-api.md](sales-api.md) for the business and HTTP contract.
+4. Follow [setup-and-delivery.md](setup-and-delivery.md) to run and assess the solution.
+5. Inspect [dependency-inventory.md](dependency-inventory.md) for the Mapperly migration and dependency audit.
+
+The implementation and automated tests are the source of truth when a document and code disagree.
