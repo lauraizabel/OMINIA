@@ -19,8 +19,9 @@ Open http://localhost:4200. The Angular development server proxies /api to the b
 
 ## Authentication flow
 
-- The access token exists only in the AuthService in-memory signal and is attached to API requests by the auth interceptor.
-- The refresh token is an opaque HttpOnly cookie; frontend JavaScript cannot read it.
+The access token is kept only in memory. Session continuity across page reloads is provided through a rotating refresh token stored in an `HttpOnly` cookie.
+
+- The auth interceptor attaches the in-memory access token to API requests.
 - Application initialization calls the refresh endpoint, so a valid cookie restores the session after reload.
 - A 401 on an authenticated API request triggers one shared refresh request and retries the original request with the new access token.
 - Logout revokes the server-side refresh family, clears the cookie, and removes the in-memory session.

@@ -22,18 +22,20 @@ The challenge text says both "above 4" and "4+". This implementation follows the
 
 ## Engineering Highlights
 
-- Layered, DDD-inspired backend with business invariants enforced by the Sale aggregate.
-- MediatR commands and queries with FluentValidation pipeline behavior.
+- Layered, DDD-inspired architecture with business rules owned by the Sale aggregate.
+- CQRS-style commands and queries using MediatR, with FluentValidation pipeline behavior.
 - PostgreSQL and EF Core persistence with stable projected list queries.
-- Strong ETags and If-Match optimistic concurrency for sale mutations.
+- Optimistic concurrency using strong ETags and `If-Match` for sale mutations.
 - Soft deletion and explicit sale/item cancellation semantics.
 - Transactional PostgreSQL outbox and idempotent MongoDB audit projection.
 - Mapperly compile-time mappings; no runtime reflection-based mapper.
-- Short-lived JWTs and rotating refresh sessions in HttpOnly cookies.
+- Short-lived JWT access tokens and rotating refresh sessions in `HttpOnly` cookies.
 - Angular workflow with in-memory access tokens and session restoration.
 - Unit, integration, functional/API, Angular, and Playwright E2E tests.
-- Docker Compose, OpenAPI, Postman, OpenTelemetry/Jaeger, and GitHub Actions CI.
 - Independent backend and frontend line/branch coverage gates of 90%.
+- Docker Compose environment for the complete local stack.
+- OpenTelemetry distributed tracing with Jaeger for local visualization.
+- OpenAPI/Swagger and an authenticated Postman collection.
 
 ## Architecture
 

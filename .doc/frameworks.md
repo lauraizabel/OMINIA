@@ -11,15 +11,28 @@ Only libraries used by the current implementation are listed.
 | ASP.NET Core | HTTP hosting, controllers, JWT authentication, authorization, rate limiting, health checks, and middleware. |
 | MediatR | Dispatches commands and queries and hosts the request validation behavior. |
 | FluentValidation | Validates application commands and selected HTTP request models. |
-| Mapperly | Generates feature-local mappings at compile time. It replaced AutoMapper; no runtime mapper registration is required. |
-| Entity Framework Core / Npgsql | PostgreSQL mappings, migrations, transactions, concurrency, projections, and repositories. |
-| MongoDB.Driver | Writes and queries the idempotent sale-event audit projection. |
+| Mapperly | Generates feature-local mappings at compile time without a runtime mapper service. |
 | BCrypt.Net-Next | Hashes user passwords. |
 | Serilog | Structured logging and exception enrichment. |
 | OpenTelemetry | Traces ASP.NET Core, HTTP, PostgreSQL, frontend requests, and outbox delivery. |
 | Swashbuckle | Generates Swagger/OpenAPI discovery in Development. |
 
-No service-bus framework is installed. Event delivery uses the PostgreSQL outbox worker; Rebus is not part of the implementation.
+## Persistence
+
+| Library | Role |
+|---|---|
+| Entity Framework Core | Maps aggregates, runs migrations, controls transactions and optimistic concurrency, and projects read queries. |
+| Npgsql | Connects EF Core to PostgreSQL, the authoritative store for users, sales, refresh sessions, and the outbox. |
+| MongoDB.Driver | Writes and queries the idempotent sale-event audit projection. |
+
+## Frontend
+
+| Library | Role |
+|---|---|
+| Angular | Implements routing, reactive forms, guards, interceptors, and the sales user interface. |
+| RxJS | Coordinates HTTP requests, shared refresh-session recovery, loading states, and component lifecycles. |
+| Vitest and Angular TestBed | Run frontend unit, component, template, guard, service, and interceptor tests. |
+| Playwright | Exercises the authenticated browser workflow, concurrency, resilience, accessibility, and telemetry. |
 
 ## Testing
 
@@ -30,5 +43,3 @@ No service-bus framework is installed. Event delivery uses the PostgreSQL outbox
 | FluentAssertions | Readable assertions in unit tests. |
 | Bogus | Test-data generation where varied data is useful. |
 | Testcontainers | Disposable PostgreSQL and MongoDB integration dependencies. |
-| Vitest and Angular TestBed | Frontend unit and component tests. |
-| Playwright | Chromium browser E2E, accessibility, concurrency, and resilience scenarios. |
