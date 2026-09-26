@@ -14,7 +14,6 @@ namespace Ambev.DeveloperEvaluation.WebApi.Features.Auth;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]
 public class AuthController : BaseController
 {
     private readonly IMediator _mediator;
@@ -42,6 +41,7 @@ public class AuthController : BaseController
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Authentication token if successful</returns>
     [HttpPost]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Login)]
     [ProducesResponseType(typeof(ApiResponseWithData<AuthenticateUserResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
@@ -66,6 +66,8 @@ public class AuthController : BaseController
     }
 
     [HttpPost("refresh")]
+    // The rotating HttpOnly cookie is the credential because the access token may already be expired.
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Session)]
     [ProducesResponseType(typeof(ApiResponseWithData<AuthenticateUserResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -99,6 +101,8 @@ public class AuthController : BaseController
     }
 
     [HttpPost("logout")]
+    // Keep revocation and cookie clearing available after the access token expires.
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Session)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
