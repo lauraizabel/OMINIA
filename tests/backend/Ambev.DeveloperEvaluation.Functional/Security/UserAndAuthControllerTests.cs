@@ -17,12 +17,17 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using Xunit;
+using Ambev.DeveloperEvaluation.Application.Auth.RefreshSessions;
+using Ambev.DeveloperEvaluation.WebApi.Security;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Ambev.DeveloperEvaluation.Functional.Security;
 
 public sealed class UserAndAuthControllerTests
 {
     private readonly IMediator _mediator = Substitute.For<IMediator>();
+    private readonly IRefreshSessionService _refreshSessions = Substitute.For<IRefreshSessionService>();
 
     [Fact]
     public async Task Authentication_controller_maps_request_and_result()
@@ -31,11 +36,13 @@ public sealed class UserAndAuthControllerTests
             .Returns(new AuthenticateUserResult
             {
                 Token = "token",
+                RefreshToken = "opaque-refresh-token",
+                RefreshTokenExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
                 Email = "manager@example.com",
                 Name = "Manager",
                 Role = nameof(UserRole.Manager)
             });
-        var controller = new AuthController(_mediator);
+        var controller = Controller();
 
         var action = await controller.AuthenticateUser(
             new AuthenticateUserRequest { Email = "manager@example.com", Password = "password" },
@@ -45,10 +52,103 @@ public sealed class UserAndAuthControllerTests
         var envelope = Assert.IsType<ApiResponseWithData<AuthenticateUserResponse>>(ok.Value);
         Assert.True(envelope.Success);
         Assert.Equal("token", envelope.Data!.Token);
+        Assert.Contains("test-refresh=opaque-refresh-token", controller.Response.Headers.SetCookie.ToString());
+        Assert.DoesNotContain("opaque-refresh-token", System.Text.Json.JsonSerializer.Serialize(envelope));
         await _mediator.Received(1).Send(
             Arg.Is<AuthenticateUserCommand>(command =>
                 command.Email == "manager@example.com" && command.Password == "password"),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Authentication_controller_rotates_and_revokes_cookie_sessions()
+    {
+        _mediator.Send(Arg.Any<RefreshUserSessionCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new RefreshUserSessionResult(
+                "new-access",
+                "new-refresh",
+                DateTimeOffset.UtcNow.AddDays(7),
+                "manager@example.com",
+                "Manager",
+                nameof(UserRole.Manager)));
+        var controller = Controller("current-refresh", "http://localhost:4200");
+
+        var refreshed = Assert.IsType<OkObjectResult>(await controller.Refresh(CancellationToken.None));
+        var envelope = Assert.IsType<ApiResponseWithData<AuthenticateUserResponse>>(refreshed.Value);
+        Assert.Equal("new-access", envelope.Data!.Token);
+        Assert.Contains("test-refresh=new-refresh", controller.Response.Headers.SetCookie.ToString());
+
+        controller = Controller("new-refresh", "http://localhost:4200");
+        Assert.IsType<NoContentResult>(await controller.Logout(CancellationToken.None));
+        await _refreshSessions.Received(1).RevokeAsync("new-refresh", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cookie_session_endpoints_reject_untrusted_browser_origins()
+    {
+        var controller = Controller("refresh-token", "https://attacker.example");
+
+        Assert.Equal(
+            403,
+            Assert.IsType<StatusCodeResult>(await controller.AuthenticateUser(
+                new AuthenticateUserRequest
+                {
+                    Email = "manager@example.com",
+                    Password = ValidTestPassword()
+                },
+                CancellationToken.None)).StatusCode);
+        Assert.Equal(403, Assert.IsType<StatusCodeResult>(await controller.Refresh(CancellationToken.None)).StatusCode);
+        Assert.Equal(403, Assert.IsType<StatusCodeResult>(await controller.Logout(CancellationToken.None)).StatusCode);
+        await _mediator.DidNotReceiveWithAnyArgs().Send(default(RefreshUserSessionCommand)!, default);
+    }
+
+    [Fact]
+    public async Task Cookie_session_endpoints_accept_the_api_origin_and_reject_malformed_origins()
+    {
+        _mediator.Send(Arg.Any<RefreshUserSessionCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new RefreshUserSessionResult(
+                "access",
+                "replacement",
+                DateTimeOffset.UtcNow.AddDays(7),
+                "manager@example.com",
+                "Manager",
+                nameof(UserRole.Manager)));
+        var sameOrigin = Controller("refresh-token", "http://localhost:5119");
+
+        Assert.IsType<OkObjectResult>(await sameOrigin.Refresh(CancellationToken.None));
+
+        var malformed = Controller("refresh-token", "not an origin");
+        Assert.Equal(403, Assert.IsType<StatusCodeResult>(
+            await malformed.Refresh(CancellationToken.None)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Missing_refresh_cookie_is_unauthorized_and_logout_remains_idempotent()
+    {
+        var controller = Controller(origin: "http://localhost:4200");
+
+        Assert.IsType<UnauthorizedResult>(await controller.Refresh(CancellationToken.None));
+        Assert.IsType<NoContentResult>(await controller.Logout(CancellationToken.None));
+        await _refreshSessions.DidNotReceiveWithAnyArgs().RevokeAsync(default!, default);
+    }
+
+    [Fact]
+    public void Production_refresh_cookie_has_host_prefix_and_strict_security_attributes()
+    {
+        var options = Options.Create(new RefreshSessionOptions());
+        var configuration = new ConfigurationBuilder().Build();
+        var manager = new RefreshTokenCookieManager(options, configuration);
+        var context = new DefaultHttpContext();
+
+        manager.Write(context.Response, "opaque-token", DateTimeOffset.UtcNow.AddDays(7));
+
+        var header = context.Response.Headers.SetCookie.ToString();
+        Assert.Contains("__Host-developerstore-refresh=opaque-token", header);
+        Assert.Contains("path=/", header, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", header, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", header, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", header, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("domain=", header, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -119,6 +219,34 @@ public sealed class UserAndAuthControllerTests
     }
 
     private static string ValidTestPassword() => string.Concat("Strong", 1, '!');
+
+    private AuthController Controller(string? refreshToken = null, string? origin = null)
+    {
+        var options = Options.Create(new RefreshSessionOptions
+        {
+            CookieName = "test-refresh",
+            SecureCookie = false
+        });
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins:0"] = "http://localhost:4200"
+            })
+            .Build();
+        var controller = new AuthController(
+            _mediator,
+            _refreshSessions,
+            new RefreshTokenCookieManager(options, configuration));
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost:5119");
+        if (origin is not null)
+            context.Request.Headers.Origin = origin;
+        if (refreshToken is not null)
+            context.Request.Headers.Cookie = $"test-refresh={refreshToken}";
+        controller.ControllerContext = new ControllerContext { HttpContext = context };
+        return controller;
+    }
 
     [Fact]
     public void Base_controller_exposes_consistent_envelopes_and_identity_claims()

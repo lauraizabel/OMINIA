@@ -3,7 +3,7 @@ import { expiredToken } from './support/jwt';
 import { fillSale, uniqueSale } from './support/sales';
 import { signIn } from './support/session';
 
-test('E12 protects a direct route, reloads safely and restores it after each login', async ({
+test('E12 protects a direct route and restores then revokes its secure cookie session', async ({
   page,
 }) => {
   await page.goto('/sales/new?returnUrl=%2Fsales');
@@ -11,9 +11,12 @@ test('E12 protects a direct route, reloads safely and restores it after each log
   await signIn(page, '/sales/new?returnUrl=%2Fsales');
   await expect(page.getByRole('heading', { name: 'Create sale' })).toBeVisible();
   await page.reload();
-  await expect(page).toHaveURL(/\/login\?returnUrl=/);
-  await signIn(page, '/sales/new?returnUrl=%2Fsales');
   await expect(page.getByRole('heading', { name: 'Create sale' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open user menu' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
 });
 
 test('E09 uses a genuinely expired token and neither loops nor resends a write', async ({

@@ -24,6 +24,7 @@ const environment = {
   E2E_JWT_SECRET: jwtSecret,
   E2E_BASE_URL: 'http://127.0.0.1:4201',
   E2E_PROXY_CONFIG: 'e2e/proxy.conf.json',
+  Cors__AllowedOrigins__0: 'http://127.0.0.1:4201',
 };
 
 let stopping = false;

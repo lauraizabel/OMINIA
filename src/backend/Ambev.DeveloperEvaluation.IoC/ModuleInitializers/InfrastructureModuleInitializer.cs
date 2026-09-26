@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
+using Ambev.DeveloperEvaluation.Application.Auth.RefreshSessions;
 
 namespace Ambev.DeveloperEvaluation.IoC.ModuleInitializers;
 
@@ -27,6 +28,17 @@ public class InfrastructureModuleInitializer : IModuleInitializer
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
         builder.Services.AddScoped<ISaleReadService, SaleReadService>();
         builder.Services.AddScoped<IAuthenticatedUserStatusValidator, AuthenticatedUserStatusValidator>();
+        builder.Services.AddScoped<IRefreshSessionService, RefreshSessionService>();
+        builder.Services.AddOptions<RefreshSessionOptions>()
+            .Bind(builder.Configuration.GetSection(RefreshSessionOptions.SectionName))
+            .Validate(options => options.IdleExpirationDays is > 0 and <= 30, "Refresh-session idle expiration must be between 1 and 30 days.")
+            .Validate(options => options.AbsoluteExpirationDays is > 0 and <= 90, "Refresh-session absolute expiration must be between 1 and 90 days.")
+            .Validate(options => options.AbsoluteExpirationDays >= options.IdleExpirationDays, "Refresh-session absolute expiration cannot be shorter than idle expiration.")
+            .Validate(options => options.TokenSizeBytes is >= 32 and <= 128, "Refresh-session tokens must contain between 32 and 128 random bytes.")
+            .Validate(options => options.ReuseGraceSeconds is >= 0 and <= 60, "Refresh-session reuse grace must be between 0 and 60 seconds.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.CookieName), "Refresh-session cookie name is required.")
+            .Validate(options => !options.SecureCookie || options.CookieName.StartsWith("__Host-", StringComparison.Ordinal), "Secure refresh-session cookies must use the __Host- prefix.")
+            .ValidateOnStart();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICorrelationIdProvider, HttpCorrelationIdProvider>();
         builder.Services.AddScoped<IOutboxAdministration, OutboxAdministration>();

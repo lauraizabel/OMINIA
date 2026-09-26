@@ -14,11 +14,7 @@ interface WorkerFixtures {
   authenticationResponse: AuthenticationEnvelope;
 }
 
-interface TestFixtures {
-  _mockAuthentication: void;
-}
-
-export const test = base.extend<TestFixtures, WorkerFixtures>({
+export const test = base.extend<Record<string, never>, WorkerFixtures>({
   authenticationResponse: [
     async ({}, use) => {
       const api = await request.newContext({
@@ -30,16 +26,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       await api.dispose();
     },
     { scope: 'worker' },
-  ],
-  _mockAuthentication: [
-    async ({ page, authenticationResponse }, use) => {
-      await page.route('**/api/auth', async (route) => {
-        if (route.request().method() !== 'POST') return route.continue();
-        await route.fulfill({ status: 200, json: authenticationResponse });
-      });
-      await use();
-    },
-    { auto: true },
   ],
 });
 

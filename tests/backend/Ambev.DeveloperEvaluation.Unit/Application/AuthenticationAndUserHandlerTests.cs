@@ -1,4 +1,5 @@
 using Ambev.DeveloperEvaluation.Application.Auth.AuthenticateUser;
+using Ambev.DeveloperEvaluation.Application.Auth.RefreshSessions;
 using Ambev.DeveloperEvaluation.Application.Users.DeleteUser;
 using Ambev.DeveloperEvaluation.Application.Users.GetUser;
 using Ambev.DeveloperEvaluation.Common.Security;
@@ -18,6 +19,7 @@ public sealed class AuthenticationAndUserHandlerTests
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly IPasswordHasher _passwords = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenGenerator _tokens = Substitute.For<IJwtTokenGenerator>();
+    private readonly IRefreshSessionService _refreshSessions = Substitute.For<IRefreshSessionService>();
 
     [Fact]
     public async Task Authenticate_returns_identity_and_generated_token_for_active_user()
@@ -26,7 +28,9 @@ public sealed class AuthenticationAndUserHandlerTests
         _users.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
         _passwords.VerifyPassword("valid-password", user.Password).Returns(true);
         _tokens.GenerateToken(user).Returns("signed-token");
-        var handler = new AuthenticateUserHandler(_users, _passwords, _tokens);
+        _refreshSessions.IssueAsync(user.Id, Arg.Any<CancellationToken>())
+            .Returns(new IssuedRefreshToken("refresh-token", DateTimeOffset.UtcNow.AddDays(7)));
+        var handler = Handler();
 
         var result = await handler.Handle(
             new AuthenticateUserCommand { Email = user.Email, Password = "valid-password" },
@@ -36,6 +40,7 @@ public sealed class AuthenticationAndUserHandlerTests
         result.Email.Should().Be(user.Email);
         result.Name.Should().Be(user.Username);
         result.Role.Should().Be(nameof(UserRole.Manager));
+        result.RefreshToken.Should().Be("refresh-token");
     }
 
     [Fact]
@@ -43,7 +48,7 @@ public sealed class AuthenticationAndUserHandlerTests
     {
         _users.GetByEmailAsync("missing@example.com", Arg.Any<CancellationToken>())
             .Returns((User?)null);
-        var handler = new AuthenticateUserHandler(_users, _passwords, _tokens);
+        var handler = Handler();
 
         var action = () => handler.Handle(
             new AuthenticateUserCommand { Email = "missing@example.com", Password = "password" },
@@ -60,7 +65,7 @@ public sealed class AuthenticationAndUserHandlerTests
         var user = User(UserStatus.Active);
         _users.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
         _passwords.VerifyPassword("wrong-password", user.Password).Returns(false);
-        var handler = new AuthenticateUserHandler(_users, _passwords, _tokens);
+        var handler = Handler();
 
         var action = () => handler.Handle(
             new AuthenticateUserCommand { Email = user.Email, Password = "wrong-password" },
@@ -79,7 +84,7 @@ public sealed class AuthenticationAndUserHandlerTests
         var user = User(status);
         _users.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
         _passwords.VerifyPassword(Arg.Any<string>(), user.Password).Returns(true);
-        var handler = new AuthenticateUserHandler(_users, _passwords, _tokens);
+        var handler = Handler();
 
         var action = () => handler.Handle(
             new AuthenticateUserCommand { Email = user.Email, Password = "password" },
@@ -87,6 +92,25 @@ public sealed class AuthenticationAndUserHandlerTests
 
         await action.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("User is not active");
+    }
+
+    [Fact]
+    public async Task Refresh_rotates_the_session_before_issuing_a_new_access_token()
+    {
+        var user = User(UserStatus.Active);
+        _refreshSessions.RotateAsync("current-refresh", Arg.Any<CancellationToken>())
+            .Returns(new RotatedRefreshToken(user, "next-refresh", DateTimeOffset.UtcNow.AddDays(7)));
+        _tokens.GenerateToken(user).Returns("next-access");
+        var handler = new RefreshUserSessionHandler(_refreshSessions, _tokens);
+
+        var result = await handler.Handle(
+            new RefreshUserSessionCommand("current-refresh"),
+            CancellationToken.None);
+
+        result.Token.Should().Be("next-access");
+        result.RefreshToken.Should().Be("next-refresh");
+        result.Email.Should().Be(user.Email);
+        await _refreshSessions.Received(1).RotateAsync("current-refresh", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -168,4 +192,7 @@ public sealed class AuthenticationAndUserHandlerTests
     };
 
     private static string TestPasswordHash() => string.Concat("test", '-', "hash");
+
+    private AuthenticateUserHandler Handler() =>
+        new(_users, _passwords, _tokens, _refreshSessions);
 }
