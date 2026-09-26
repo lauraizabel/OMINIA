@@ -1,8 +1,6 @@
-﻿using AutoMapper;
 using MediatR;
 using FluentValidation;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
-using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Common.Security;
 using Ambev.DeveloperEvaluation.Domain.Exceptions;
 
@@ -14,18 +12,16 @@ namespace Ambev.DeveloperEvaluation.Application.Users.CreateUser;
 public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserResult>
 {
     private readonly IUserRepository _userRepository;
-    private readonly IMapper _mapper;
     private readonly IPasswordHasher _passwordHasher;
 
     /// <summary>
     /// Initializes a new instance of CreateUserHandler
     /// </summary>
     /// <param name="userRepository">The user repository</param>
-    /// <param name="mapper">The AutoMapper instance</param>
-    public CreateUserHandler(IUserRepository userRepository, IMapper mapper, IPasswordHasher passwordHasher)
+    /// <param name="passwordHasher">The password hashing service</param>
+    public CreateUserHandler(IUserRepository userRepository, IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
-        _mapper = mapper;
         _passwordHasher = passwordHasher;
     }
 
@@ -51,11 +47,10 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, CreateUserRe
                 "A user with this email already exists.");
         }
 
-        var user = _mapper.Map<User>(command);
+        var user = command.ToEntity();
         user.Password = _passwordHasher.HashPassword(command.Password);
 
         var createdUser = await _userRepository.CreateAsync(user, cancellationToken);
-        var result = _mapper.Map<CreateUserResult>(createdUser);
-        return result;
+        return createdUser.ToCreateUserResult();
     }
 }

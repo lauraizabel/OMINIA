@@ -43,7 +43,7 @@ PostgreSQL is published on host port 5434 to avoid common conflicts with an exis
 
 ### Known baseline risks
 
-- AutoMapper 13.0.1 is affected by [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x). Patched releases start at 15.1.1, but AutoMapper 15 also introduces a license requirement. The project will replace AutoMapper with explicit mappings instead of accepting a new commercial dependency during baseline setup.
+- Resolved on September 25, 2026: AutoMapper 13.0.1, affected by [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x), was replaced with Apache-2.0-licensed Riok.Mapperly 4.3.1. Mapperly generates strict, feature-local mappings at compile time without requiring runtime mapper registration.
 - Docker Desktop on Windows may fail to resolve a checkout path that contains decomposed Unicode characters. The current workspace was validated through a temporary ASCII junction. A normal checkout in an ASCII-only path, such as `D:\work\ambev-evaluation`, does not require this workaround.
 - The inherited user API still returns HTTP 500 instead of HTTP 404 when a deleted or unknown user is queried. Error normalization belongs to the API protection work and must be fixed before delivery.
 - The development JWT secret and database password are template-only local values. Production configuration must provide secrets externally.

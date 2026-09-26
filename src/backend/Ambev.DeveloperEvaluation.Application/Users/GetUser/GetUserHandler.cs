@@ -1,4 +1,3 @@
-using AutoMapper;
 using MediatR;
 using FluentValidation;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
@@ -12,19 +11,14 @@ namespace Ambev.DeveloperEvaluation.Application.Users.GetUser;
 public class GetUserHandler : IRequestHandler<GetUserCommand, GetUserResult>
 {
     private readonly IUserRepository _userRepository;
-    private readonly IMapper _mapper;
 
     /// <summary>
     /// Initializes a new instance of GetUserHandler
     /// </summary>
     /// <param name="userRepository">The user repository</param>
-    /// <param name="mapper">The AutoMapper instance</param>
-    public GetUserHandler(
-        IUserRepository userRepository,
-        IMapper mapper)
+    public GetUserHandler(IUserRepository userRepository)
     {
         _userRepository = userRepository;
-        _mapper = mapper;
     }
 
     /// <summary>
@@ -49,6 +43,6 @@ public class GetUserHandler : IRequestHandler<GetUserCommand, GetUserResult>
                 "The requested user does not exist.");
         }
 
-        return _mapper.Map<GetUserResult>(user);
+        return user.ToGetUserResult();
     }
 }
