@@ -29,7 +29,11 @@ export function uniqueSale(prefix: string): SaleDraft {
 }
 
 export async function fillSale(page: Page, sale: SaleDraft): Promise<void> {
-  await page.getByLabel('Sale number').fill(sale.saleNumber);
+  const editor = page.getByRole('main');
+  await expect(editor.getByRole('heading', { name: 'Create sale', exact: true })).toBeVisible();
+
+  const saleNumber = editor.locator('form').getByLabel('Sale number');
+  await saleNumber.fill(sale.saleNumber);
 
   const customer = page.getByRole('region', { name: 'Customer' });
   await customer.getByLabel('External ID').fill(sale.customerId);
@@ -45,7 +49,7 @@ export async function fillSale(page: Page, sale: SaleDraft): Promise<void> {
   await item.getByLabel('Quantity').fill(String(sale.quantity));
   await item.getByLabel('Unit price').fill(String(sale.unitPrice));
 
-  await expect(page.getByLabel('Sale number')).toHaveValue(sale.saleNumber);
+  await expect(saleNumber).toHaveValue(sale.saleNumber);
 }
 
 export async function createSale(page: Page, sale: SaleDraft): Promise<string> {
