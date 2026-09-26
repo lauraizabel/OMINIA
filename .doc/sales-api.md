@@ -279,8 +279,8 @@ Creation with an existing normalized sale number returns `409`. It is not an ide
 | Listing, filters, ordering, and pagination | T06 | Query integration and HTTP tests |
 | Sale/item cancellation and soft delete | T07 | Domain, persistence, and HTTP tests |
 | Error format, authorization, request limits | T08 | Functional security and failure tests |
-| Optional events | T09 | Post-commit event tests |
+| Optional events | T09/T15 | Transactional outbox, retry, ordering, replay, and MongoDB idempotency tests |
 
-Event publication remains optional under the challenge README. `SaleCreated`, `SaleModified`, `SaleCancelled`, and `ItemCancelled` are logged only after a successful commit with an event ID, sale ID, aggregate version, occurrence time, and correlation ID. A publishing failure is logged without reporting the already committed sale write as rolled back.
+Event publication remains an extension to the challenge README. `SaleCreated`, `SaleModified`, `SaleCancelled`, and `ItemCancelled` are stored in the PostgreSQL outbox in the same transaction as the aggregate change, with an event ID, sale ID, aggregate version, intra-version sequence, occurrence time, correlation ID, and JSON payload.
 
-This delivery is best effort. A process failure between the PostgreSQL commit and the structured log can lose an event. Durable delivery through a transactional outbox is a separate extension and is not guaranteed by this contract.
+The worker claims only the earliest pending event for each aggregate, uses leases and `FOR UPDATE SKIP LOCKED` for safe horizontal concurrency, and retries with bounded exponential backoff. MongoDB uses the event ID as the document key, making delivery idempotent when a worker crashes after the audit write but before acknowledging the outbox row. Delivery is at least once and eventually consistent. Exhausted retries are visible through health and administrator-only outbox endpoints and can be replayed explicitly.
