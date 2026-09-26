@@ -29,6 +29,8 @@ public class InfrastructureModuleInitializer : IModuleInitializer
         builder.Services.AddScoped<ISaleReadService, SaleReadService>();
         builder.Services.AddScoped<IAuthenticatedUserStatusValidator, AuthenticatedUserStatusValidator>();
         builder.Services.AddScoped<IRefreshSessionService, RefreshSessionService>();
+        builder.Services.AddScoped<RefreshSessionCleanup>();
+        builder.Services.AddHostedService<RefreshSessionCleanupWorker>();
         builder.Services.AddOptions<RefreshSessionOptions>()
             .Bind(builder.Configuration.GetSection(RefreshSessionOptions.SectionName))
             .Validate(options => options.IdleExpirationDays is > 0 and <= 30, "Refresh-session idle expiration must be between 1 and 30 days.")
@@ -36,6 +38,10 @@ public class InfrastructureModuleInitializer : IModuleInitializer
             .Validate(options => options.AbsoluteExpirationDays >= options.IdleExpirationDays, "Refresh-session absolute expiration cannot be shorter than idle expiration.")
             .Validate(options => options.TokenSizeBytes is >= 32 and <= 128, "Refresh-session tokens must contain between 32 and 128 random bytes.")
             .Validate(options => options.ReuseGraceSeconds is >= 0 and <= 60, "Refresh-session reuse grace must be between 0 and 60 seconds.")
+            .Validate(options => options.CleanupRetentionDays is >= 1 and <= 365, "Refresh-session cleanup retention must be between 1 and 365 days.")
+            .Validate(options => options.CleanupIntervalMinutes is >= 1 and <= 1440, "Refresh-session cleanup interval must be between 1 minute and 1 day.")
+            .Validate(options => options.CleanupBatchSize is >= 1 and <= 10000, "Refresh-session cleanup batch size must be between 1 and 10000 rows.")
+            .Validate(options => options.CleanupMaxBatchesPerCycle is >= 1 and <= 100, "Refresh-session cleanup cycle must process between 1 and 100 batches.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.CookieName), "Refresh-session cookie name is required.")
             .Validate(options => !options.SecureCookie || options.CookieName.StartsWith("__Host-", StringComparison.Ordinal), "Secure refresh-session cookies must use the __Host- prefix.")
             .ValidateOnStart();

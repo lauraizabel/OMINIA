@@ -4,6 +4,8 @@ using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.ORM;
 using Ambev.DeveloperEvaluation.ORM.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -176,6 +178,51 @@ public sealed class RefreshSessionTests
                 () => Service(context, clock).RotateAsync(issued.Token));
     }
 
+    [Fact]
+    public async Task Cleanup_removes_only_families_past_absolute_expiration_and_retention_in_bounded_batches()
+    {
+        await ResetDatabaseAsync();
+        var userId = await SeedUserAsync(UserStatus.Active);
+        await using (var context = CreateContext())
+        {
+            context.RefreshSessions.AddRange(
+                Session(userId, Now.AddDays(-9)),
+                Session(userId, Now.AddDays(-8)),
+                Session(userId, Now.AddDays(-7)),
+                Session(userId, Now.AddDays(1), Now.AddDays(-30)));
+            await context.SaveChangesAsync();
+        }
+
+        var options = Options.Create(new RefreshSessionOptions
+        {
+            CleanupRetentionDays = 7,
+            CleanupBatchSize = 1,
+            CleanupMaxBatchesPerCycle = 2
+        });
+        var services = new ServiceCollection()
+            .AddScoped(_ => CreateContext())
+            .AddScoped<RefreshSessionCleanup>()
+            .AddSingleton<TimeProvider>(new MutableTimeProvider(Now))
+            .AddSingleton<IOptions<RefreshSessionOptions>>(options)
+            .BuildServiceProvider();
+        await using var provider = services;
+        var worker = new RefreshSessionCleanupWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            options,
+            NullLogger<RefreshSessionCleanupWorker>.Instance);
+
+        Assert.Equal(2, await worker.RunCycleAsync());
+        Assert.Equal(0, await worker.RunCycleAsync());
+
+        await using var verification = CreateContext();
+        var remaining = await verification.RefreshSessions
+            .OrderBy(session => session.AbsoluteExpiresAt)
+            .ToListAsync();
+        Assert.Equal(2, remaining.Count);
+        Assert.Contains(remaining, session => session.AbsoluteExpiresAt == Now.AddDays(-7));
+        Assert.Contains(remaining, session => session.RevokedAt == Now.AddDays(-30));
+    }
+
     private RefreshSessionService Service(DefaultContext context, TimeProvider clock) =>
         new(context, clock, Options.Create(new RefreshSessionOptions()));
 
@@ -213,6 +260,24 @@ public sealed class RefreshSessionTests
         context.Users.Add(user);
         await context.SaveChangesAsync();
         return user.Id;
+    }
+
+    private static RefreshSession Session(
+        Guid userId,
+        DateTimeOffset absoluteExpiration,
+        DateTimeOffset? revokedAt = null)
+    {
+        var session = RefreshSession.Create(
+            Guid.NewGuid(),
+            userId,
+            Guid.NewGuid(),
+            Convert.ToHexString(Guid.NewGuid().ToByteArray()).PadRight(64, '0'),
+            Now.AddDays(-40),
+            absoluteExpiration,
+            absoluteExpiration);
+        if (revokedAt is not null)
+            session.Revoke(revokedAt.Value, "Test");
+        return session;
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
