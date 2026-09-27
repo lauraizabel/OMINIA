@@ -10,7 +10,9 @@ Angular 22 frontend for the DeveloperStore sales API.
 
 ## Run locally
 
-~~~powershell
+These commands are the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 npm ci
 npm start
 ~~~
@@ -31,7 +33,7 @@ The frontend does not write authentication tokens to localStorage, sessionStorag
 
 ## Quality checks
 
-~~~powershell
+~~~shell
 npm run lint
 npx tsc -p tsconfig.app.json --noEmit
 npm run test:ci -- --coverage
@@ -42,7 +44,7 @@ Angular TestBed runs through Vitest. CI enforces independent 90% line and branch
 
 ## Playwright
 
-~~~powershell
+~~~shell
 npm run test:e2e:install
 npm run test:e2e
 ~~~

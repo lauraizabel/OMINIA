@@ -24,7 +24,9 @@ This suite runs the Angular application against a real API and PostgreSQL databa
 
 Install Chromium once, then run the isolated stack:
 
-```powershell
+These commands are the same in Windows PowerShell, Linux, and macOS:
+
+```shell
 npm run test:e2e:install
 npm run test:e2e
 ```
@@ -33,19 +35,32 @@ The command builds and starts disposable API and PostgreSQL containers, generate
 
 Arguments after `--` are forwarded to Playwright. For example, this command repeats the interrupted-response scenario without retries while reusing one isolated stack:
 
-```powershell
+```shell
 npm run test:e2e -- resilience-accessibility.spec.ts --grep E10 --repeat-each=10 --retries=0
 ```
 
 CI retries unexpected browser failures to retain diagnostic evidence, but `failOnFlakyTests` makes the job fail when any test needs a retry.
 
-To test an already running stack, configure an active `Manager` or `Admin` account outside Git and run:
+To test an already running stack, configure an active `Manager` or `Admin` account outside Git.
+
+Windows PowerShell:
 
 ```powershell
 $env:E2E_ADMIN_EMAIL = 'admin@example.com'
 $env:E2E_ADMIN_PASSWORD = '<local-password>'
 $env:E2E_SKIP_WEB_SERVER = '1' # omit when Angular should be started automatically
 npm run test:e2e:existing
+Remove-Item Env:E2E_ADMIN_EMAIL, Env:E2E_ADMIN_PASSWORD, Env:E2E_SKIP_WEB_SERVER
+```
+
+Linux or macOS (bash/zsh):
+
+```bash
+export E2E_ADMIN_EMAIL='admin@example.com'
+export E2E_ADMIN_PASSWORD='<local-password>'
+export E2E_SKIP_WEB_SERVER='1' # omit when Angular should be started automatically
+npm run test:e2e:existing
+unset E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD E2E_SKIP_WEB_SERVER
 ```
 
 The Angular development server starts automatically. Set `E2E_BASE_URL` when testing another frontend URL. The suite authenticates once per Playwright worker and reuses that real response in isolated browser contexts so it respects the API login rate limit. Unique sale identities make test runs independent of execution order. Reports, traces, screenshots, and videos are ignored by Git; failure artifacts are retained by Playwright.

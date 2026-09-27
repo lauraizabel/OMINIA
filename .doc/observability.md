@@ -8,7 +8,9 @@ The local delivery includes end-to-end OpenTelemetry tracing for the Angular cli
 
 Start the complete Compose stack, sign in, and exercise a sale flow:
 
-```powershell
+This command is the same in Windows PowerShell, Linux, and macOS:
+
+```shell
 docker compose up --detach --build --wait --wait-timeout 240
 ```
 
