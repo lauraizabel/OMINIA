@@ -47,6 +47,21 @@ describe('SalesApiService', () => {
     request.flush({ data: [], totalItems: 0, currentPage: 2, totalPages: 0 });
   });
 
+  it('uses a contains pattern for a plain sale number search', () => {
+    service
+      .list({
+        page: 1,
+        size: 10,
+        order: 'saleDate desc',
+        saleNumber: 'K0X8L3',
+      })
+      .subscribe();
+
+    const request = http.expectOne((candidate) => candidate.url === '/api/sales');
+    expect(request.request.params.get('saleNumber')).toBe('*K0X8L3*');
+    request.flush({ data: [], totalItems: 0, currentPage: 1, totalPages: 0 });
+  });
+
   it('keeps an ETag as an opaque value when reading and updating', async () => {
     const read = firstValueFrom(service.get('sale-id'));
     http.expectOne('/api/sales/sale-id').flush(sale(), { headers: { ETag: '"opaque-v7"' } });

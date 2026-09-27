@@ -23,7 +23,7 @@ export class SalesApiService {
       .set('_order', query.order);
 
     const values: [string, string | number | boolean | undefined][] = [
-      ['saleNumber', query.saleNumber],
+      ['saleNumber', toSaleNumberPattern(query.saleNumber)],
       ['customerExternalId', query.customerExternalId],
       ['branchExternalId', query.branchExternalId],
       ['isCancelled', query.isCancelled],
@@ -81,6 +81,11 @@ export class SalesApiService {
   delete(id: string, etag: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`, { headers: ifMatch(etag) });
   }
+}
+
+function toSaleNumberPattern(value: string | undefined): string | undefined {
+  if (!value || value.startsWith('*') || value.endsWith('*')) return value;
+  return `*${value}*`;
 }
 
 function ifMatch(etag: string): HttpHeaders {
