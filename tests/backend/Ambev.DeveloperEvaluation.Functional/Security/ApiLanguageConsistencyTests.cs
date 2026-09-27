@@ -1,12 +1,14 @@
 using System.Globalization;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using Ambev.DeveloperEvaluation.WebApi.Configuration;
+using Ambev.DeveloperEvaluation.WebApi.Security;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -53,6 +55,7 @@ public sealed class ApiLanguageConsistencyTests
         var options = provider.GetRequiredService<IOptions<ApiBehaviorOptions>>().Value;
         var modelState = new ModelStateDictionary();
         modelState.AddModelError("Quantity", "O valor fornecido é inválido.");
+        modelState.AddModelError(string.Empty, "A requisição é inválida.");
         var httpContext = new DefaultHttpContext { RequestServices = provider };
         var actionContext = new ActionContext(
             httpContext,
@@ -64,11 +67,40 @@ public sealed class ApiLanguageConsistencyTests
             options.InvalidModelStateResponseFactory(actionContext));
         var response = Assert.IsType<ApiErrorResponse>(result.Value);
         var errors = Assert.IsAssignableFrom<IReadOnlyCollection<ApiErrorDetail>>(response.Errors);
-        var error = Assert.Single(errors);
 
-        Assert.Equal("quantity", error.Field);
-        Assert.Equal("InvalidValue", error.Code);
-        Assert.Equal("The supplied value is invalid.", error.Message);
+        Assert.Equal(2, errors.Count);
+        Assert.Contains(errors, error =>
+            error is
+            {
+                Field: "quantity",
+                Code: "InvalidValue",
+                Message: "The supplied value is invalid."
+            });
+        Assert.Contains(errors, error =>
+            error is
+            {
+                Field: "",
+                Code: "InvalidValue",
+                Message: "The supplied value is invalid."
+            });
+    }
+
+    [Theory]
+    [InlineData("Security:LoginRateLimit:PermitLimit", "0")]
+    [InlineData("Security:LoginRateLimit:WindowSeconds", "0")]
+    public void Api_configuration_rejects_invalid_rate_limit_boundaries(string key, string value)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddApiProtection();
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<LoginRateLimitOptions>>();
+
+        Assert.Throws<OptionsValidationException>(() => _ = options.Value);
     }
 
     private sealed class ValidationTarget
