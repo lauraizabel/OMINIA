@@ -18,13 +18,23 @@ Customer, branch, and product catalogs are outside this challenge. Sales store e
 
 ## Reviewer quick start
 
+Windows PowerShell:
+
 ~~~powershell
 Copy-Item .env.example .env
 ~~~
 
+Linux or macOS (bash/zsh):
+
+~~~bash
+cp .env.example .env
+~~~
+
 Fill POSTGRES_PASSWORD, DATABASE_CONNECTION_STRING, and JWT_SECRET_KEY. To use the UI, set DEVELOPMENT_ADMIN_ENABLED=true plus a local email and password. Then run:
 
-~~~powershell
+The following command is the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 docker compose up --detach --build --wait --wait-timeout 240
 ~~~
 
@@ -63,7 +73,9 @@ These controls reduce token exposure and detect replay. Production still require
 
 ### Backend
 
-~~~powershell
+These commands are the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 dotnet build Ambev.DeveloperEvaluation.sln -c Release
 dotnet test Ambev.DeveloperEvaluation.sln -c Release --no-build
 ~~~
@@ -74,8 +86,8 @@ dotnet test Ambev.DeveloperEvaluation.sln -c Release --no-build
 
 ### Frontend
 
-~~~powershell
-Set-Location src/frontend
+~~~shell
+cd src/frontend
 npm ci
 npm run lint
 npx tsc -p tsconfig.app.json --noEmit
@@ -87,7 +99,7 @@ Vitest and Angular TestBed cover services, guards, interceptors, forms, componen
 
 ### Playwright E2E
 
-~~~powershell
+~~~shell
 npm run test:e2e:install
 npm run test:e2e
 ~~~

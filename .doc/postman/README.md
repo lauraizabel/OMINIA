@@ -9,7 +9,9 @@ Select the **DeveloperStore — Local** environment. Set `adminPassword` locally
 
 Start the application before running the collection:
 
-```powershell
+This command is the same in Windows PowerShell, Linux, and macOS:
+
+```shell
 docker compose up --detach --build --wait --wait-timeout 240
 ```
 
@@ -43,7 +45,9 @@ The exported collection and environment contain no password or token. Avoid expo
 
 ## Command-line execution
 
-Newman can run the same workflow. Store the local password in a temporary shell environment variable so it is not added to the command itself:
+Newman can run the same workflow. Store the local password in a temporary shell environment variable so it is not added to the command itself.
+
+Windows PowerShell:
 
 ```powershell
 $env:POSTMAN_ADMIN_PASSWORD = '<local-development-password>'
@@ -52,6 +56,17 @@ npx --yes newman@6.2.1 run .doc/postman/DeveloperStore-Sales.postman_collection.
   --env-var "adminPassword=$env:POSTMAN_ADMIN_PASSWORD" `
   --reporters cli
 Remove-Item Env:POSTMAN_ADMIN_PASSWORD
+```
+
+Linux or macOS (bash/zsh):
+
+```bash
+export POSTMAN_ADMIN_PASSWORD='<local-development-password>'
+npx --yes newman@6.2.1 run .doc/postman/DeveloperStore-Sales.postman_collection.json \
+  --environment .doc/postman/DeveloperStore-Local.postman_environment.json \
+  --env-var "adminPassword=$POSTMAN_ADMIN_PASSWORD" \
+  --reporters cli
+unset POSTMAN_ADMIN_PASSWORD
 ```
 
 If only one protected folder is run, execute **01 — Authentication** first unless a valid `accessToken` and refresh cookie are already present. Always leave **06 — Session termination** until the end because it intentionally revokes the current refresh family.

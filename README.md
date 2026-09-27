@@ -47,13 +47,23 @@ See [Project structure](.doc/project-structure.md) for dependency boundaries and
 
 Requirements: Docker Engine or Docker Desktop with Docker Compose v2.
 
+Windows PowerShell:
+
 ~~~powershell
 Copy-Item .env.example .env
 ~~~
 
+Linux or macOS (bash/zsh):
+
+~~~bash
+cp .env.example .env
+~~~
+
 Set POSTGRES_PASSWORD, DATABASE_CONNECTION_STRING, and JWT_SECRET_KEY in .env. To sign in through the UI, also enable and configure the development administrator. The database password in both PostgreSQL settings must match, and the JWT key must contain at least 32 bytes.
 
-~~~powershell
+This command is the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 docker compose up --detach --build --wait --wait-timeout 240
 ~~~
 
@@ -74,15 +84,17 @@ Use docker compose down to stop the stack, or add --volumes only when a full loc
 
 Backend build and all .NET test projects:
 
-~~~powershell
+These commands are the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 dotnet build Ambev.DeveloperEvaluation.sln -c Release
 dotnet test Ambev.DeveloperEvaluation.sln -c Release --no-build
 ~~~
 
 Frontend lint, typecheck, unit tests with coverage, and production build:
 
-~~~powershell
-Set-Location src/frontend
+~~~shell
+cd src/frontend
 npm ci
 npm run lint
 npx tsc -p tsconfig.app.json --noEmit
@@ -92,7 +104,7 @@ npm run build
 
 Playwright starts disposable PostgreSQL and API containers and removes them afterward. Docker must be available:
 
-~~~powershell
+~~~shell
 npm run test:e2e:install
 npm run test:e2e
 ~~~

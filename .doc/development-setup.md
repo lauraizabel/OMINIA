@@ -17,8 +17,16 @@ Containerized execution requires Git and Docker Compose v2. Direct local develop
 
 Copy the environment template and provide local-only values:
 
+Windows PowerShell:
+
 ~~~powershell
 Copy-Item .env.example .env
+~~~
+
+Linux or macOS (bash/zsh):
+
+~~~bash
+cp .env.example .env
 ~~~
 
 Required values:
@@ -39,7 +47,9 @@ DEVELOPMENT_ADMIN_PASSWORD=<strong-local-password>
 
 .env is ignored by Git. Start the stack:
 
-~~~powershell
+The following commands are the same in Windows PowerShell, Linux, and macOS:
+
+~~~shell
 docker compose up --detach --build --wait --wait-timeout 240
 docker compose ps
 ~~~
@@ -60,14 +70,14 @@ The ports can be overridden through the matching variables in .env.example.
 
 Start the persistence dependencies:
 
-~~~powershell
+~~~shell
 docker compose up --detach database audit-database
 dotnet tool restore
 ~~~
 
 Configure secrets outside committed files:
 
-~~~powershell
+~~~shell
 dotnet user-secrets set "Jwt:SecretKey" "<random-value-containing-at-least-32-bytes>" --project src/backend/Ambev.DeveloperEvaluation.WebApi
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>" --project src/backend/Ambev.DeveloperEvaluation.WebApi
 dotnet user-secrets set "MongoAudit:Enabled" "true" --project src/backend/Ambev.DeveloperEvaluation.WebApi
@@ -78,15 +88,25 @@ Configure DevelopmentAdmin values through User Secrets when a UI account is need
 
 Apply migrations:
 
+Windows PowerShell:
+
 ~~~powershell
 $env:ConnectionStrings__DefaultConnection = "Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>"
 dotnet tool run dotnet-ef database update --project src/backend/Ambev.DeveloperEvaluation.ORM --startup-project src/backend/Ambev.DeveloperEvaluation.WebApi
 Remove-Item Env:ConnectionStrings__DefaultConnection
 ~~~
 
+Linux or macOS (bash/zsh):
+
+~~~bash
+export ConnectionStrings__DefaultConnection='Host=localhost;Port=5434;Database=developer_evaluation;Username=developer;Password=<local-database-password>'
+dotnet tool run dotnet-ef database update --project src/backend/Ambev.DeveloperEvaluation.ORM --startup-project src/backend/Ambev.DeveloperEvaluation.WebApi
+unset ConnectionStrings__DefaultConnection
+~~~
+
 Open Ambev.DeveloperEvaluation.sln in Rider and select the WebApi http profile, or run:
 
-~~~powershell
+~~~shell
 dotnet run --project src/backend/Ambev.DeveloperEvaluation.WebApi
 ~~~
 
@@ -96,8 +116,8 @@ Both paths use http://localhost:5119 in Development.
 
 Start the API first, then:
 
-~~~powershell
-Set-Location src/frontend
+~~~shell
+cd src/frontend
 npm ci
 npm start
 ~~~
