@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8f02493d-73ca-4f85-b986-b5333d7eb87a",
     "name": "DeveloperStore Sales API — Reviewer Collection",
-    "description": "A review-ready collection for the DeveloperStore sales delivery. Run folders in order. Authentication stores the JWT automatically; sale requests capture IDs and strong ETags; the concurrency folder proves stale-write protection; cleanup requests remove generated sales. No credential is stored in this exported collection.",
+    "description": "A deterministic reviewer collection for the delivered DeveloperStore sales workflow. Run folders in order. It covers health, rotating cookie-backed sessions, sale rules, strong ETag concurrency, validation/security failures, administrator outbox operations, logout, and post-logout rejection. No credential or token is stored in the export.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -145,12 +145,41 @@
               }
             }
           ]
+        },
+        {
+          "name": "Overall health — diagnostics are available",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Returns all registered checks. A degraded optional audit dependency still returns 200.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Overall health returns 200', () => pm.response.to.have.status(200));",
+                  "const payload = pm.response.json();",
+                  "pm.test('Health details are returned', () => {",
+                  "  pm.expect(['Healthy', 'Degraded']).to.include(payload.status);",
+                  "  pm.expect(payload.healthChecks).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "01 — Authentication",
-      "description": "Authenticate once. The post-response script stores `data.token` as the collection variable `accessToken`, inherited by every protected request.",
+      "description": "Authenticate and exercise the rotating HttpOnly refresh session. Postman keeps the refresh cookie in its cookie jar; scripts store only the current access token.",
       "item": [
         {
           "name": "Login and capture JWT",
@@ -186,13 +215,86 @@
                 "exec": [
                   "pm.test('Login returns 200', () => pm.response.to.have.status(200));",
                   "const payload = pm.response.json();",
-                  "pm.test('Response contains a bearer token', () => {",
+                  "const setCookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "pm.test('Response contains an access token and no refresh token', () => {",
                   "  pm.expect(payload.data).to.be.an('object');",
                   "  pm.expect(payload.data.token).to.be.a('string');",
                   "  pm.expect(payload.data.token.length).to.be.greaterThan(20);",
+                  "  pm.expect(JSON.stringify(payload)).not.to.include('refreshToken');",
+                  "});",
+                  "pm.test('Refresh credential is issued as an HttpOnly SameSite cookie', () => {",
+                  "  pm.expect(setCookie).to.match(/(?:__Host-)?developerstore-refresh=/);",
+                  "  pm.expect(setCookie.toLowerCase()).to.include('httponly');",
+                  "  pm.expect(setCookie.toLowerCase()).to.include('samesite=strict');",
                   "});",
                   "pm.collectionVariables.set('accessToken', payload.data.token);",
                   "pm.test('Authenticated role can operate sales', () => pm.expect(['Manager', 'Admin']).to.include(payload.data.role));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh session — rotate cookie and capture JWT",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "Uses the HttpOnly cookie from the Postman cookie jar and captures the access token returned by the refreshed session.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Refresh returns 200', () => pm.response.to.have.status(200));",
+                  "const payload = pm.response.json();",
+                  "const setCookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "pm.test('Refresh returns an access token without exposing the refresh token', () => {",
+                  "  pm.expect(payload.data.token).to.be.a('string');",
+                  "  pm.expect(JSON.stringify(payload)).not.to.include('refreshToken');",
+                  "});",
+                  "pm.test('Rotated refresh cookie remains HttpOnly and SameSite Strict', () => {",
+                  "  pm.expect(setCookie).to.match(/(?:__Host-)?developerstore-refresh=/);",
+                  "  pm.expect(setCookie.toLowerCase()).to.include('httponly');",
+                  "  pm.expect(setCookie.toLowerCase()).to.include('samesite=strict');",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', payload.data.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh from an untrusted origin — 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "https://attacker.example",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "Sends a hostile Origin header while retaining the valid cookie. The trusted-origin check rejects it.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Untrusted browser origin is rejected', () => pm.response.to.have.status(403));"
                 ],
                 "type": "text/javascript"
               }
@@ -494,6 +596,66 @@
               }
             }
           ]
+        },
+        {
+          "name": "Duplicate sale number after soft delete — 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Creates two lines. Four units receive 10% discount; two units receive no discount. The script stores the sale ID, both item IDs, and the strong ETag.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleNumber\": \"{{saleNumber}}\",\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\n    \"externalId\": \"POSTMAN-CUSTOMER-001\",\n    \"name\": \"Postman Customer\"\n  },\n  \"branch\": {\n    \"externalId\": \"POSTMAN-BRANCH-001\",\n    \"name\": \"Postman Branch\"\n  },\n  \"items\": [\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-P001\",\n        \"name\": \"Discounted Product\"\n      },\n      \"quantity\": 4,\n      \"unitPrice\": 10.0\n    },\n    {\n      \"product\": {\n        \"externalId\": \"POSTMAN-P002\",\n        \"name\": \"Regular Product\"\n      },\n      \"quantity\": 2,\n      \"unitPrice\": 5.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sale number remains globally unique after soft delete', () => pm.response.to.have.status(409));",
+                  "const error = pm.response.json();",
+                  "pm.test('Conflict error is explicit', () => pm.expect(error.type).to.eql('Conflict'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown sale — 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales/00000000-0000-0000-0000-000000000001",
+            "description": "Uses a deterministic UUID that is never created by this collection."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unknown sale returns 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error includes a trace ID', () => pm.expect(pm.response.json().traceId).to.be.a('string'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -590,6 +752,47 @@
                   "pm.test('First writer returns 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('concurrencyEtag', pm.response.headers.get('ETag'));",
                   "pm.test('Version advanced', () => pm.expect(pm.collectionVariables.get('concurrencyEtag')).not.to.eql(pm.collectionVariables.get('staleEtag')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed If-Match wildcard — 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "If-Match",
+                "value": "*",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{concurrencySaleId}}",
+            "description": "Strong sale ETags are required; wildcard If-Match is not accepted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saleDate\": \"{{$isoTimestamp}}\",\n  \"customer\": {\"externalId\": \"POSTMAN-CUSTOMER-CONCURRENCY\", \"name\": \"Concurrency Customer\"},\n  \"branch\": {\"externalId\": \"POSTMAN-BRANCH-CONCURRENCY\", \"name\": \"Concurrency Branch\"},\n  \"items\": [{\"id\": \"{{concurrencyItemId}}\", \"product\": {\"externalId\": \"POSTMAN-CONCURRENCY-P001\", \"name\": \"Concurrency Product\"}, \"quantity\": 6, \"unitPrice\": 10.0}]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Wildcard precondition is rejected', () => pm.response.to.have.status(400));"
                 ],
                 "type": "text/javascript"
               }
@@ -834,6 +1037,219 @@
               "script": {
                 "exec": [
                   "pm.test('Invalid token returns 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown query parameter — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales?_unexpected=true",
+            "description": "The list parser rejects parameters outside its allowlist."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unknown query parameter returns 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported ordering field — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales?_order=customerName%20asc",
+            "description": "Only saleDate, saleNumber, totalAmount, and id are accepted ordering fields."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unsupported ordering field returns 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported content type — 415",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Sales writes accept JSON rather than plain text.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unsupported media type returns 415', () => pm.response.to.have.status(415));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Outbox operations",
+      "description": "Administrator-only, deterministic operational checks. The collection does not manufacture a dead letter.",
+      "item": [
+        {
+          "name": "Read outbox status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/operations/outbox",
+            "description": "Reads backlog and dead-letter metadata without returning domain-event payloads."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Outbox status returns 200', () => pm.response.to.have.status(200));",
+                  "const payload = pm.response.json();",
+                  "pm.test('Operational counters and dead-letter metadata are present', () => {",
+                  "  pm.expect(payload.pendingCount).to.be.a('number');",
+                  "  pm.expect(payload.deadLetterCount).to.be.a('number');",
+                  "  pm.expect(payload.deadLetters).to.be.an('array');",
+                  "});",
+                  "pm.test('Operational response does not expose event payloads', () => pm.expect(JSON.stringify(payload).toLowerCase()).not.to.include('payload'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replay unknown event — 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/operations/outbox/00000000-0000-0000-0000-000000000001/replay",
+            "description": "Replay is exercised safely with an event ID that does not exist."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unknown outbox event returns 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Session termination",
+      "description": "End the reviewer flow by revoking the refresh family, clearing the cookie, and proving anonymous requests remain rejected.",
+      "item": [
+        {
+          "name": "Logout — revoke family and clear cookie",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "Uses the current refresh cookie. Logout remains available even when an access token has expired.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Logout returns 204', () => pm.response.to.have.status(204));",
+                  "const setCookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "pm.test('Refresh cookie is cleared', () => {",
+                  "  pm.expect(setCookie).to.match(/(?:__Host-)?developerstore-refresh=/);",
+                  "  const normalizedCookie = setCookie.toLowerCase();",
+                  "  pm.expect(normalizedCookie.includes('expires=') || normalizedCookie.includes('max-age=0')).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.unset('accessToken');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh after logout — 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "The previous refresh family was revoked and its browser cookie was cleared.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Revoked or cleared session cannot refresh', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales access without bearer after logout — 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "No bearer token is sent after the collection clears its in-memory access-token variable.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Protected sales remain unavailable anonymously', () => pm.response.to.have.status(401));"
                 ],
                 "type": "text/javascript"
               }
