@@ -1,5 +1,6 @@
-using System.Threading.RateLimiting;
+using System.Globalization;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Ambev.DeveloperEvaluation.Application;
 using Ambev.DeveloperEvaluation.Domain.Enums;
 using Ambev.DeveloperEvaluation.WebApi.Common;
@@ -20,6 +21,8 @@ public static class ApiConfigurationExtensions
 
     public static IServiceCollection AddApiProtection(this IServiceCollection services)
     {
+        ValidatorOptions.Global.LanguageManager.Culture = CultureInfo.GetCultureInfo("en");
+
         services.Configure<KestrelServerOptions>(options =>
             options.Limits.MaxRequestBodySize = RequestBodyLimitMiddleware.MaximumBodySize);
         services.Configure<IISServerOptions>(options =>
@@ -35,10 +38,10 @@ public static class ApiConfigurationExtensions
             options.InvalidModelStateResponseFactory = context =>
             {
                 var errors = context.ModelState
-                    .SelectMany(entry => entry.Value?.Errors.Select(error => new ApiErrorDetail(
+                    .SelectMany(entry => entry.Value?.Errors.Select(_ => new ApiErrorDetail(
                         ToCamelCase(entry.Key),
                         "InvalidValue",
-                        string.IsNullOrWhiteSpace(error.ErrorMessage) ? "The supplied value is invalid." : error.ErrorMessage))
+                        "The supplied value is invalid."))
                         ?? [])
                     .ToArray();
 
